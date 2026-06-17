@@ -199,7 +199,7 @@ class DownloadWorker(
             // Defensive close: streamToDisk / extractZipStream already close
             // the underlying InputStream via `use {}`, but ensure the body is
             // released even on early exceptions.
-            runCatching { body.close() }
+            runCatching { response.close() }
         }
     }
 
@@ -372,7 +372,7 @@ class DownloadWorker(
                         outFile.mkdirs()
                     } else {
                         outFile.parentFile?.mkdirs()
-                        FileOutputStream(outFile).use { out ->
+                        java.io.FileOutputStream(outFile).use { out ->
                             val buffer = ByteArray(BUFFER_SIZE)
                             while (true) {
                                 val read = zipIn.read(buffer)
