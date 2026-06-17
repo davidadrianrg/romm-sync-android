@@ -351,49 +351,45 @@ class DownloadWorker(
         fileName: String,
         platformSlug: String,
     ) {
+        val input = body.byteStream()
+        val output = FileOutputStream(targetFile, append = offset > 0L)
         try {
-            body.byteStream().use { input ->
-                FileOutputStream(targetFile, append = offset > 0L).use { output ->
-                    val buffer = ByteArray(BUFFER_SIZE)
-                    var bytesDownloaded = 0L
+            val buffer = ByteArray(BUFFER_SIZE)
+            var bytesDownloaded = 0L
 
-                    // Pre-report resume progress so the UI jumps to offset%.
-                    var lastReportedProgress = if (offset > 0L && totalBytes > 0L) {
-                        ((offset * 100) / totalBytes).toInt().also { p ->
-                            reportProgress(p, false, romId, romName, fileName, platformSlug)
-                        }
-                    } else {
-                        -1
-                    }
+            var lastReportedProgress = if (offset > 0L && totalBytes > 0L) {
+                ((offset * 100) / totalBytes).toInt().also { p ->
+                    reportProgress(p, false, romId, romName, fileName, platformSlug)
+                }
+            } else {
+                -1
+            }
 
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read == -1) break
+            while (true) {
+                val read = input.read(buffer)
+                if (read == -1) break
 
-                        output.write(buffer, 0, read)
-                        bytesDownloaded += read
+                output.write(buffer, 0, read)
+                bytesDownloaded += read
 
-                        // Report progress every ~2% of the TOTAL file
-                        val progress = if (totalBytes > 0L) {
-                            (((offset + bytesDownloaded) * 100) / totalBytes).toInt()
-                        } else 0
+                val progress = if (totalBytes > 0L) {
+                    (((offset + bytesDownloaded) * 100) / totalBytes).toInt()
+                } else 0
 
-                        if (progress - lastReportedProgress >= 2 || progress >= 100) {
-                            lastReportedProgress = progress
-                            reportProgress(progress, false, romId, romName, fileName, platformSlug)
-                        }
-                    }
-                    output.flush()
+                if (progress - lastReportedProgress >= 2 || progress >= 100) {
+                    lastReportedProgress = progress
+                    reportProgress(progress, false, romId, romName, fileName, platformSlug)
                 }
             }
+            output.flush()
         } catch (e: Exception) {
-            // When resuming, keep the partial file so the next attempt can
-            // continue from where we left off. When starting from scratch,
-            // delete the partial file to avoid corrupt half-written data.
             if (offset == 0L && targetFile.exists()) {
                 targetFile.delete()
             }
             throw e
+        } finally {
+            input.close()
+            output.close()
         }
     }
 
