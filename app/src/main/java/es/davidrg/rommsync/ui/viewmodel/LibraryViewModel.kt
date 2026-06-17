@@ -34,8 +34,20 @@ class LibraryViewModel(
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
+    /** True when actively loading the next page (not the first). */
+    private val _isLoadingMore = MutableStateFlow(false)
+    val isLoadingMore = _isLoadingMore.asStateFlow()
+
+    /** False when we've fetched all pages for this platform. */
+    private val _hasMore = MutableStateFlow(true)
+    val hasMore = _hasMore.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
+
+    companion object {
+        private const val PAGE_SIZE = 50
+    }
 
     /** One-shot events for UI feedback (snackbars). */
     private val _events = MutableSharedFlow<LibraryEvent>(extraBufferCapacity = 5)
@@ -88,7 +100,9 @@ class LibraryViewModel(
         loadRoms(serverUrl, apiKey, reset = true)
     }
 
+    /** Called by infinite scroll when user nears the bottom. */
     fun loadMore(serverUrl: String, apiKey: String) {
+        if (_isLoadingMore.value || !_hasMore.value || _isLoading.value) return
         loadRoms(serverUrl, apiKey, reset = false)
     }
 
@@ -102,18 +116,26 @@ class LibraryViewModel(
     private fun loadRoms(serverUrl: String, apiKey: String, reset: Boolean) {
         val platformId = _selectedPlatformId.value ?: return
         viewModelScope.launch {
-            _isLoading.value = true
+            if (reset) {
+                _isLoading.value = true
+                _hasMore.value = true
+            } else {
+                _isLoadingMore.value = true
+            }
             _error.value = null
             runCatching {
                 romRepository.configureApi(serverUrl, apiKey)
                 val offset = if (reset) 0 else _roms.value.size
                 val newRoms = romRepository.fetchRoms(platformId, offset = offset)
                 _roms.value = if (reset) newRoms else _roms.value + newRoms
+                // If the API returned fewer than PAGE_SIZE items, there are no more pages
+                _hasMore.value = newRoms.size >= PAGE_SIZE
             }.onFailure { e ->
                 _error.value = e.message ?: "Error al cargar juegos"
                 _events.emit(LibraryEvent.Error(e.message ?: "Error al cargar juegos"))
             }
             _isLoading.value = false
+            _isLoadingMore.value = false
         }
     }
 }

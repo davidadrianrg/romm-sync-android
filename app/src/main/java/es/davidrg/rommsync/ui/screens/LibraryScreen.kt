@@ -15,8 +15,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -50,9 +52,11 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -146,6 +150,25 @@ fun LibraryScreen() {
     // Adaptive grid: more columns in landscape (handhelds 16:9 / 4:3)
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
     val minCardSize = if (isLandscape) 110.dp else 140.dp
+
+    // ── Infinite scroll state ──────────────────────────────────────────
+    val gridState = rememberLazyGridState()
+    val isLoadingMore by viewModel.isLoadingMore.collectAsState()
+    val hasMore by viewModel.hasMore.collectAsState()
+
+    // Detect when user scrolls near the bottom → trigger loadMore
+    val reachedBottom by remember {
+        derivedStateOf {
+            val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val totalItems = filteredRoms.size
+            totalItems > 0 && lastVisibleIndex >= totalItems - 8
+        }
+    }
+    LaunchedEffect(reachedBottom, selectedPlatformId) {
+        if (reachedBottom && hasMore && !isLoadingMore && selectedPlatformId != null) {
+            viewModel.loadMore(settings.serverUrl, settings.apiKey)
+        }
+    }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Biblioteca") }) },
@@ -282,6 +305,7 @@ fun LibraryScreen() {
 
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = minCardSize),
+                state = gridState,
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -302,6 +326,19 @@ fun LibraryScreen() {
                         },
                         onLongPress = { selectedRom = romStatus.rom },
                     )
+                }
+                // Loading more footer
+                if (isLoadingMore) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
+                        }
+                    }
                 }
             }
         }
