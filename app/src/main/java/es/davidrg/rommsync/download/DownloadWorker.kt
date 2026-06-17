@@ -3,6 +3,7 @@ package es.davidrg.rommsync.download
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -64,10 +65,14 @@ class DownloadWorker(
         // Build API client for this download
         val apiService = NetworkModule.createApiService(serverUrl, apiKey)
 
-        // Start foreground service notification
+        // Start foreground service notification (safe for Android 14+)
         createNotificationChannel()
-        val foreInfo = createForegroundInfo(romName, 0, indeterminate = true)
-        setForeground(foreInfo)
+        try {
+            val foreInfo = createForegroundInfo(romName, 0, indeterminate = true)
+            setForeground(foreInfo)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not start foreground service (notification permission denied?)", e)
+        }
 
         reportProgress(0, false, romId, romName, fileName, platformSlug)
 
@@ -175,8 +180,12 @@ class DownloadWorker(
         ))
 
         // Update foreground notification with progress
-        val foreInfo = createForegroundInfo(romName, progress, indeterminate)
-        setForeground(foreInfo)
+        try {
+            val foreInfo = createForegroundInfo(romName, progress, indeterminate)
+            setForeground(foreInfo)
+        } catch (e: Exception) {
+            // Notification permission may have been revoked mid-download
+        }
     }
 
     /**
@@ -200,7 +209,16 @@ class DownloadWorker(
             }
             .build()
 
-        return ForegroundInfo(NOTIFICATION_ID, notification)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Android 14+ requires explicit foreground service type
+            ForegroundInfo(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+            )
+        } else {
+            ForegroundInfo(NOTIFICATION_ID, notification)
+        }
     }
 
     /**

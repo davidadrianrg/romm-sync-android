@@ -95,8 +95,14 @@ class RomRepository(
     /**
      * Fetch paginated ROMs for a platform from the server.
      * Uses platform_ids (plural) + offset pagination per RomM API spec.
+     * Optional search term triggers server-side full-text search across ALL ROMs.
      */
-    suspend fun fetchRoms(platformId: Int, limit: Int = 50, offset: Int = 0): ApiResult<List<Rom>> {
+    suspend fun fetchRoms(
+        platformId: Int,
+        limit: Int = 50,
+        offset: Int = 0,
+        search: String? = null,
+    ): ApiResult<List<Rom>> {
         return try {
             val params = buildMap {
                 put("platform_ids", platformId.toString())
@@ -104,6 +110,9 @@ class RomRepository(
                 put("offset", offset.toString())
                 put("order_by", "name")
                 put("order_dir", "asc")
+                if (!search.isNullOrBlank()) {
+                    put("search", search.trim())
+                }
             }
             val response = api().getRoms(params)
             ApiResult.Success(response.items.map { it.toDomain() })

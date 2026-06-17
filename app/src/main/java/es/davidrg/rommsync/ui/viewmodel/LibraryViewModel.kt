@@ -47,6 +47,9 @@ class LibraryViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
 
+    /** Current server-side search term (null = no search, empty page browsing). */
+    private var currentSearch: String? = null
+
     companion object {
         private const val PAGE_SIZE = 50
     }
@@ -99,6 +102,17 @@ class LibraryViewModel(
 
     fun selectPlatform(platformId: Int, serverUrl: String, apiKey: String) {
         _selectedPlatformId.value = platformId
+        currentSearch = null
+        loadRoms(serverUrl, apiKey, reset = true)
+    }
+
+    /**
+     * Server-side search: fetches ROMs matching [query] from the ENTIRE platform,
+     * not just the already-loaded pages. Replaces the current list.
+     * Pass empty string to clear search and reload full list.
+     */
+    fun searchRoms(query: String, serverUrl: String, apiKey: String) {
+        currentSearch = query.ifBlank { null }
         loadRoms(serverUrl, apiKey, reset = true)
     }
 
@@ -127,7 +141,7 @@ class LibraryViewModel(
             _error.value = null
             romRepository.configureApi(serverUrl, apiKey)
             val offset = if (reset) 0 else _roms.value.size
-            when (val result = romRepository.fetchRoms(platformId, offset = offset)) {
+            when (val result = romRepository.fetchRoms(platformId, offset = offset, search = currentSearch)) {
                 is ApiResult.Success -> {
                     _roms.value = if (reset) result.data else _roms.value + result.data
                     _hasMore.value = result.data.size >= PAGE_SIZE

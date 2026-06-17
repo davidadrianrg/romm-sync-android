@@ -58,6 +58,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,6 +68,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -108,6 +111,18 @@ fun LibraryScreen() {
     var selectedFilter by remember { mutableStateOf(RomFilter.ALL) }
     var platformMenuExpanded by remember { mutableStateOf(false) }
 
+    // ── Server-side search with debounce ──────────────────────────────
+    LaunchedEffect(selectedPlatformId) {
+        snapshotFlow { searchQuery }
+            .debounce(400)
+            .distinctUntilChanged()
+            .collect { query ->
+                if (selectedPlatformId != null) {
+                    viewModel.searchRoms(query, settings.serverUrl, settings.apiKey)
+                }
+            }
+    }
+
     // Bottom sheet state for long-press game details
     var selectedRom by remember { mutableStateOf<Rom?>(null) }
     val sheetState = rememberModalBottomSheetState()
@@ -135,18 +150,13 @@ fun LibraryScreen() {
         }
     }
 
-    // Filter ROMs by search + status (memoized to avoid recalculating on every recomposition)
-    val filteredRoms by remember(romsWithStatus, searchQuery, selectedFilter) {
+    // Filter ROMs by status only (search is server-side now)
+    val filteredRoms by remember(romsWithStatus, selectedFilter) {
         derivedStateOf {
-            romsWithStatus.filter { rws ->
-                val matchesSearch = searchQuery.isBlank() ||
-                    rws.rom.name.contains(searchQuery, ignoreCase = true)
-                val matchesFilter = when (selectedFilter) {
-                    RomFilter.ALL -> true
-                    RomFilter.MISSING -> rws.status == DownloadStatus.NOT_DOWNLOADED
-                    RomFilter.DOWNLOADED -> rws.status == DownloadStatus.DOWNLOADED
-                }
-                matchesSearch && matchesFilter
+            when (selectedFilter) {
+                RomFilter.ALL -> romsWithStatus
+                RomFilter.MISSING -> romsWithStatus.filter { it.status == DownloadStatus.NOT_DOWNLOADED }
+                RomFilter.DOWNLOADED -> romsWithStatus.filter { it.status == DownloadStatus.DOWNLOADED }
             }
         }
     }
@@ -175,7 +185,11 @@ fun LibraryScreen() {
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Biblioteca") }) },
+        topBar = {
+            if (!isLandscape) {
+                TopAppBar(title = { Text("Biblioteca") })
+            }
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(
@@ -184,12 +198,11 @@ fun LibraryScreen() {
                 .padding(padding)
                 .padding(horizontal = 12.dp),
         ) {
-            // ── Platform selector + search ──────────────────────────────
-            // In landscape: side-by-side to save vertical space
+            // In landscape: platform + search + filter chips all compact in one area
             if (isLandscape) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     ExposedDropdownMenuBox(
@@ -214,6 +227,7 @@ fun LibraryScreen() {
                                 DropdownMenuItem(
                                     text = { Text("${platform.name} (${platform.romCount})") },
                                     onClick = {
+                                        searchQuery = ""
                                         viewModel.selectPlatform(platform.id, settings.serverUrl, settings.apiKey)
                                         platformMenuExpanded = false
                                     },
@@ -229,6 +243,19 @@ fun LibraryScreen() {
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
+                }
+                // Filter chips compact row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    RomFilter.entries.forEach { filter ->
+                        FilterChip(
+                            selected = selectedFilter == filter,
+                            onClick = { selectedFilter = filter },
+                            label = { Text(filter.label) },
+                        )
+                    }
                 }
             } else {
                 ExposedDropdownMenuBox(
@@ -253,6 +280,7 @@ fun LibraryScreen() {
                             DropdownMenuItem(
                                 text = { Text("${platform.name} (${platform.romCount})") },
                                 onClick = {
+                                    searchQuery = ""
                                     viewModel.selectPlatform(platform.id, settings.serverUrl, settings.apiKey)
                                     platformMenuExpanded = false
                                 },
@@ -260,27 +288,31 @@ fun LibraryScreen() {
                         }
                     }
                 }
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text("Buscar...") },
-                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                    singleLine = true,
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
-            // ── Filter chips ────────────────────────────────────────────
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                RomFilter.entries.forEach { filter ->
-                    FilterChip(
-                        selected = selectedFilter == filter,
-                        onClick = { selectedFilter = filter },
-                        label = { Text(filter.label) },
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Buscar en toda la plataforma...") },
+                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
                     )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    RomFilter.entries.forEach { filter ->
+                        FilterChip(
+                            selected = selectedFilter == filter,
+                            onClick = { selectedFilter = filter },
+                            label = { Text(filter.label) },
+                        )
+                    }
                 }
             }
 
