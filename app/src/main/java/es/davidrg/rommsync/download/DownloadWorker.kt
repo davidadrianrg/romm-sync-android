@@ -21,9 +21,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.ResponseBody
 import retrofit2.HttpException
-import retrofit2.Response
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 import java.util.zip.ZipInputStream
 
@@ -178,59 +176,18 @@ class DownloadWorker(
         romId: Int,
         romName: String,
     ): Result {
+        val response = apiService.downloadRom(romId, fileName)
+        val contentLength = response.contentLength()
         val targetFile = PathMapper.getRomFile(romsRootPath, platformSlug, fileName)
 
-        // Attempt resume: if a partial file exists, try Range header
-        val existingSize = if (targetFile.exists()) targetFile.length() else 0L
-        val rangeHeader: String? = if (existingSize > 0L) "bytes=$existingSize-" else null
-        if (existingSize > 0L) {
-            Log.i(TAG, "Attempting resume of '$romName': $existingSize bytes already on disk")
-        }
-
-        val response = apiService.downloadRom(romId, fileName, rangeHeader)
-
-        if (!response.isSuccessful) {
-            // 416 Range Not Satisfiable → file already complete
-            if (response.code() == 416 && existingSize > 0L) {
-                Log.i(TAG, "'$romName' already complete (HTTP 416)")
-                response.errorBody()?.close()
-                reportProgress(100, false, romId, romName, fileName, platformSlug)
-                return Result.success(workDataOf(
-                    KEY_ROM_ID to romId, KEY_ROM_NAME to romName,
-                    KEY_FILE_NAME to fileName, KEY_PLATFORM_SLUG to platformSlug,
-                    KEY_LOCAL_PATH to targetFile.absolutePath,
-                ))
-            }
-            response.errorBody()?.close()
-            throw HttpException(response)
-        }
-
-        val body: ResponseBody = response.body() ?: throw IOException("Empty response body")
-        val isPartial = response.code() == 206
-        val offset = if (isPartial) existingSize else 0L
-        val contentLength = body.contentLength()
-
-        // If full 200 but local file already covers it
-        if (!isPartial && existingSize > 0L && contentLength > 0L && existingSize >= contentLength) {
-            Log.i(TAG, "'$romName' already complete (local ≥ Content-Length)")
-            body.close()
-            reportProgress(100, false, romId, romName, fileName, platformSlug)
-            return Result.success(workDataOf(
-                KEY_ROM_ID to romId, KEY_ROM_NAME to romName,
-                KEY_FILE_NAME to fileName, KEY_PLATFORM_SLUG to platformSlug,
-                KEY_LOCAL_PATH to targetFile.absolutePath,
-            ))
-        }
-
         return try {
-            if (contentLength <= 0L && !isPartial) {
-                // mod_zip: extract on the fly
-                if (targetFile.exists()) targetFile.delete()
+            if (contentLength <= 0L) {
+                // mod_zip: Content-Length = -1
                 reportProgress(0, true, romId, romName, fileName, platformSlug)
-                extractZipStream(body, romsRootPath, platformSlug)
+                extractZipStream(response, romsRootPath, platformSlug)
             } else {
-                val totalBytes = offset + contentLength.coerceAtLeast(0L)
-                streamToDisk(body, targetFile, totalBytes, offset, romId, romName, fileName, platformSlug)
+                streamToDisk(response, targetFile, contentLength, 0L,
+                    romId, romName, fileName, platformSlug)
             }
 
             Result.success(workDataOf(
@@ -351,45 +308,37 @@ class DownloadWorker(
         fileName: String,
         platformSlug: String,
     ) {
-        val input = body.byteStream()
-        val output = FileOutputStream(targetFile, append = offset > 0L)
+        var input: java.io.InputStream? = null
+        var output: java.io.FileOutputStream? = null
         try {
-            val buffer = ByteArray(BUFFER_SIZE)
+            input = body.byteStream()
+            output = java.io.FileOutputStream(targetFile, offset > 0L)
+            val buffer = ByteArray(64 * 1024)
             var bytesDownloaded = 0L
-
-            var lastReportedProgress = if (offset > 0L && totalBytes > 0L) {
-                ((offset * 100) / totalBytes).toInt().also { p ->
-                    reportProgress(p, false, romId, romName, fileName, platformSlug)
-                }
-            } else {
-                -1
-            }
+            var lastReportedProgress = -1
 
             while (true) {
                 val read = input.read(buffer)
-                if (read == -1) break
-
+                if (read < 0) break
                 output.write(buffer, 0, read)
-                bytesDownloaded += read
+                bytesDownloaded = bytesDownloaded + read.toLong()
 
-                val progress = if (totalBytes > 0L) {
-                    (((offset + bytesDownloaded) * 100) / totalBytes).toInt()
-                } else 0
-
-                if (progress - lastReportedProgress >= 2 || progress >= 100) {
-                    lastReportedProgress = progress
-                    reportProgress(progress, false, romId, romName, fileName, platformSlug)
+                if (totalBytes > 0L) {
+                    val progress = ((offset + bytesDownloaded) * 100 / totalBytes).toInt()
+                    if (progress - lastReportedProgress >= 2 || progress >= 100) {
+                        lastReportedProgress = progress
+                        reportProgress(progress, false, romId, romName, fileName, platformSlug)
+                    }
                 }
             }
-            output.flush()
         } catch (e: Exception) {
             if (offset == 0L && targetFile.exists()) {
                 targetFile.delete()
             }
             throw e
         } finally {
-            input.close()
-            output.close()
+            try { input?.close() } catch (_: Exception) {}
+            try { output?.close() } catch (_: Exception) {}
         }
     }
 
