@@ -114,7 +114,7 @@ class RomRepository(
                 put("order_by", "name")
                 put("order_dir", "asc")
                 if (!search.isNullOrBlank()) {
-                    put("search", search.trim())
+                    put("search_term", search.trim())
                 }
                 if (!genre.isNullOrBlank()) {
                     put("genre", genre.trim())
