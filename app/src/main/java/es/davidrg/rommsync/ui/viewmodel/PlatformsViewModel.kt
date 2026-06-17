@@ -3,6 +3,8 @@ package es.davidrg.rommsync.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import es.davidrg.rommsync.data.repository.RomRepository
+import es.davidrg.rommsync.domain.model.ApiResult
+import es.davidrg.rommsync.domain.model.ErrorKind
 import es.davidrg.rommsync.domain.model.Platform
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -32,11 +34,14 @@ class PlatformsViewModel(
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
-            runCatching {
-                romRepository.configureApi(serverUrl, apiKey)
-                romRepository.fetchAndCachePlatforms()
-            }.onFailure { e ->
-                _error.value = e.message ?: "Error al cargar plataformas"
+            romRepository.configureApi(serverUrl, apiKey)
+            when (val result = romRepository.fetchAndCachePlatforms()) {
+                is ApiResult.Success -> {
+                    // platforms flow auto-refreshes from Room
+                }
+                is ApiResult.Error -> {
+                    _error.value = result.kind.toUserMessage()
+                }
             }
             _isLoading.value = false
         }
@@ -57,4 +62,15 @@ class PlatformsViewModel(
             }
         }
     }
+}
+
+/**
+ * Maps [ErrorKind] to user-facing Spanish messages.
+ */
+private fun ErrorKind.toUserMessage(): String = when (this) {
+    ErrorKind.NETWORK -> "Sin conexión al servidor"
+    ErrorKind.AUTH -> "API Key inválida o sin permisos"
+    ErrorKind.NOT_FOUND -> "No encontrado"
+    ErrorKind.SERVER -> "Error del servidor (500)"
+    ErrorKind.UNKNOWN -> "Error desconocido"
 }

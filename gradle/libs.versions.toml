@@ -12,6 +12,7 @@ datastore = "1.1.1"
 workManager = "2.10.0"
 room = "2.6.1"
 documentfile = "1.0.1"
+securityCrypto = "1.1.0-alpha06"
 
 # Compose
 composeBom = "2024.12.01"
@@ -49,6 +50,9 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 
 # DocumentFile (for folder selection)
 androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
+
+# Security (EncryptedSharedPreferences for API key)
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 
 # Compose
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }

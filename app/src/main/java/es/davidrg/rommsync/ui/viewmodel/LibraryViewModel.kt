@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import es.davidrg.rommsync.data.local.ServerConfig
 import es.davidrg.rommsync.data.repository.RomRepository
+import es.davidrg.rommsync.domain.model.ApiResult
 import es.davidrg.rommsync.domain.model.DownloadStatus
+import es.davidrg.rommsync.domain.model.ErrorKind
 import es.davidrg.rommsync.domain.model.Rom
 import es.davidrg.rommsync.domain.model.RomWithStatus
 import es.davidrg.rommsync.download.DownloadManager
@@ -123,21 +125,35 @@ class LibraryViewModel(
                 _isLoadingMore.value = true
             }
             _error.value = null
-            runCatching {
-                romRepository.configureApi(serverUrl, apiKey)
-                val offset = if (reset) 0 else _roms.value.size
-                val newRoms = romRepository.fetchRoms(platformId, offset = offset)
-                _roms.value = if (reset) newRoms else _roms.value + newRoms
-                // If the API returned fewer than PAGE_SIZE items, there are no more pages
-                _hasMore.value = newRoms.size >= PAGE_SIZE
-            }.onFailure { e ->
-                _error.value = e.message ?: "Error al cargar juegos"
-                _events.emit(LibraryEvent.Error(e.message ?: "Error al cargar juegos"))
+            romRepository.configureApi(serverUrl, apiKey)
+            val offset = if (reset) 0 else _roms.value.size
+            when (val result = romRepository.fetchRoms(platformId, offset = offset)) {
+                is ApiResult.Success -> {
+                    _roms.value = if (reset) result.data else _roms.value + result.data
+                    _hasMore.value = result.data.size >= PAGE_SIZE
+                }
+                is ApiResult.Error -> {
+                    val userMessage = result.kind.toUserMessage()
+                    _error.value = userMessage
+                    _events.emit(LibraryEvent.Error(userMessage))
+                }
             }
             _isLoading.value = false
             _isLoadingMore.value = false
         }
     }
+
+}
+
+/**
+ * Maps [ErrorKind] to user-facing Spanish messages.
+ */
+private fun ErrorKind.toUserMessage(): String = when (this) {
+    ErrorKind.NETWORK -> "Sin conexión al servidor"
+    ErrorKind.AUTH -> "API Key inválida o sin permisos"
+    ErrorKind.NOT_FOUND -> "No encontrado"
+    ErrorKind.SERVER -> "Error del servidor (500)"
+    ErrorKind.UNKNOWN -> "Error desconocido"
 }
 
 /** One-shot UI events emitted by the ViewModel. */

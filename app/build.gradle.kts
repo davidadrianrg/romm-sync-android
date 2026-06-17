@@ -45,6 +45,10 @@ android {
     }
 }
 
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
@@ -67,6 +71,9 @@ dependencies {
 
     // DocumentFile
     implementation(libs.androidx.documentfile)
+
+    // Security (EncryptedSharedPreferences)
+    implementation(libs.androidx.security.crypto)
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))

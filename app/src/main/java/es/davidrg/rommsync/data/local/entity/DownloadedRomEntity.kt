@@ -1,9 +1,10 @@
 package es.davidrg.rommsync.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "downloaded_roms")
+@Entity(tableName = "downloaded_roms", indices = [Index("platformId")])
 data class DownloadedRomEntity(
     @PrimaryKey val romId: Int,
     val name: String,

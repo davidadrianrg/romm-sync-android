@@ -14,4 +14,5 @@ data class DownloadTask(
     val isRunning: Boolean = false,
     val isCompleted: Boolean = false,
     val isFailed: Boolean = false,
+    val errorMessage: String? = null,
 )

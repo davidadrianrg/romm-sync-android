@@ -20,6 +20,29 @@ interface PlatformDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(platforms: List<PlatformEntity>)
 
+    /**
+     * Inserta o actualiza plataformas preservando el valor existente de 'visible'.
+     *
+     * A diferencia de [upsertAll] (que usa REPLACE y sobrescribe 'visible' con el
+     * valor que traiga la entidad —siempre true al venir del servidor—), esta
+     * query respeta la preferencia del usuario:
+     *  - Si la plataforma ya existe, mantiene su 'visible' actual.
+     *  - Si es nueva, la inserta con visible = 1 (COALESCE por defecto).
+     */
+    @Query(
+        """
+        INSERT INTO platforms (id, slug, name, romCount, visible)
+        VALUES (:id, :slug, :name, :romCount, COALESCE((SELECT visible FROM platforms WHERE id = :id), 1))
+        ON CONFLICT(id) DO UPDATE SET slug = :slug, name = :name, romCount = :romCount
+        """
+    )
+    suspend fun upsertPreservingVisibility(
+        id: Int,
+        slug: String,
+        name: String,
+        romCount: Int,
+    )
+
     @Query("UPDATE platforms SET visible = :visible WHERE id = :id")
     suspend fun updateVisibility(id: Int, visible: Boolean)
 

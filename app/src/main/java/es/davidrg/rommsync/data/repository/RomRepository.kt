@@ -7,11 +7,15 @@ import es.davidrg.rommsync.data.local.entity.PlatformEntity
 import es.davidrg.rommsync.data.remote.NetworkModule
 import es.davidrg.rommsync.data.remote.RomMApiService
 import es.davidrg.rommsync.data.remote.dto.RomDto
+import es.davidrg.rommsync.domain.model.ApiResult
+import es.davidrg.rommsync.domain.model.ErrorKind
 import es.davidrg.rommsync.domain.model.Platform
 import es.davidrg.rommsync.domain.model.Rom
 import es.davidrg.rommsync.domain.model.RomFile
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.io.IOException
+import retrofit2.HttpException
 
 /**
  * Central repository for all RomM data operations.
@@ -41,12 +45,37 @@ class RomRepository(
 
     // ── Platforms ──────────────────────────────────────────────────────
 
-    /** Fetch platforms from server, cache to Room, return domain models. */
-    suspend fun fetchAndCachePlatforms(): List<Platform> {
-        val platforms = api().getPlatforms()
-        val entities = platforms.map { it.toEntity() }
-        platformDao.upsertAll(entities)
-        return entities.map { it.toDomain() }
+    /**
+     * Fetch platforms from server, cache to Room, return domain models.
+     *
+     * Usa [PlatformDao.upsertPreservingVisibility] en vez de REPLACE para no
+     * sobrescribir la preferencia de visibilidad del usuario en cada refresh.
+     */
+    suspend fun fetchAndCachePlatforms(): ApiResult<Unit> {
+        return try {
+            val platforms = api().getPlatforms()
+            platforms.forEach { dto ->
+                platformDao.upsertPreservingVisibility(
+                    id = dto.id,
+                    slug = dto.slug,
+                    name = dto.displayName ?: dto.name,
+                    romCount = dto.romCount,
+                )
+            }
+            ApiResult.Success(Unit)
+        } catch (e: HttpException) {
+            val kind = when (e.code()) {
+                401, 403 -> ErrorKind.AUTH
+                404 -> ErrorKind.NOT_FOUND
+                in 500..599 -> ErrorKind.SERVER
+                else -> ErrorKind.UNKNOWN
+            }
+            ApiResult.Error(kind, "HTTP ${e.code()}: ${e.message()}")
+        } catch (e: IOException) {
+            ApiResult.Error(ErrorKind.NETWORK, e.message ?: "Network error")
+        } catch (e: Exception) {
+            ApiResult.Error(ErrorKind.UNKNOWN, e.message ?: "Unknown error")
+        }
     }
 
     /** Get cached platforms as a reactive Flow. */
@@ -67,16 +96,30 @@ class RomRepository(
      * Fetch paginated ROMs for a platform from the server.
      * Uses platform_ids (plural) + offset pagination per RomM API spec.
      */
-    suspend fun fetchRoms(platformId: Int, limit: Int = 50, offset: Int = 0): List<Rom> {
-        val params = buildMap {
-            put("platform_ids", platformId.toString())
-            put("limit", limit.toString())
-            put("offset", offset.toString())
-            put("order_by", "name")
-            put("order_dir", "asc")
+    suspend fun fetchRoms(platformId: Int, limit: Int = 50, offset: Int = 0): ApiResult<List<Rom>> {
+        return try {
+            val params = buildMap {
+                put("platform_ids", platformId.toString())
+                put("limit", limit.toString())
+                put("offset", offset.toString())
+                put("order_by", "name")
+                put("order_dir", "asc")
+            }
+            val response = api().getRoms(params)
+            ApiResult.Success(response.items.map { it.toDomain() })
+        } catch (e: HttpException) {
+            val kind = when (e.code()) {
+                401, 403 -> ErrorKind.AUTH
+                404 -> ErrorKind.NOT_FOUND
+                in 500..599 -> ErrorKind.SERVER
+                else -> ErrorKind.UNKNOWN
+            }
+            ApiResult.Error(kind, "HTTP ${e.code()}: ${e.message()}")
+        } catch (e: IOException) {
+            ApiResult.Error(ErrorKind.NETWORK, e.message ?: "Network error")
+        } catch (e: Exception) {
+            ApiResult.Error(ErrorKind.UNKNOWN, e.message ?: "Unknown error")
         }
-        val response = api().getRoms(params)
-        return response.items.map { it.toDomain() }
     }
 
     /** Reactive set of all downloaded ROM IDs for quick UI status lookup. */
@@ -115,14 +158,6 @@ class RomRepository(
     suspend fun isRomDownloaded(romId: Int): Boolean = romDao.isDownloaded(romId)
 
     // ── Mappers ────────────────────────────────────────────────────────
-
-    private fun es.davidrg.rommsync.data.remote.dto.PlatformDto.toEntity() = PlatformEntity(
-        id = id,
-        slug = slug,
-        name = displayName ?: name,
-        romCount = romCount,
-        visible = true,
-    )
 
     private fun PlatformEntity.toDomain() = Platform(
         id = id,

@@ -26,4 +26,24 @@ class DownloadQueueViewModel(
     fun cancelAll() {
         downloadManager.cancelAllDownloads()
     }
+
+    /**
+     * Prunes all SUCCEEDED and FAILED work from the WorkManager queue.
+     * The downloads StateFlow will automatically update after prune.
+     */
+    fun clearCompleted() {
+        downloadManager.pruneCompletedWork()
+    }
+
+    /**
+     * Re-enqueues a failed download as a new work request.
+     */
+    fun retryDownload(task: DownloadTask) {
+        downloadManager.retryDownload(
+            romId = task.romId,
+            romName = task.romName,
+            fileName = task.fileName,
+            platformSlug = task.platformSlug,
+        )
+    }
 }

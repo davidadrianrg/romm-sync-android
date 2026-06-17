@@ -13,7 +13,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -24,6 +26,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -31,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -53,11 +57,24 @@ fun DownloadQueueScreen() {
 
     val downloads by viewModel.downloads.collectAsState()
 
+    val hasCompletedOrFailed = downloads.any { it.isCompleted || it.isFailed }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Cola de Descargas") },
                 actions = {
+                    if (hasCompletedOrFailed) {
+                        TextButton(onClick = { viewModel.clearCompleted() }) {
+                            Icon(
+                                Icons.Filled.CleaningServices,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.size(4.dp))
+                            Text("Limpiar")
+                        }
+                    }
                     if (downloads.any { it.isRunning }) {
                         Button(
                             onClick = { viewModel.cancelAll() },
@@ -76,6 +93,7 @@ fun DownloadQueueScreen() {
                     .fillMaxSize()
                     .padding(padding),
                 verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
                     "No hay descargas en cola",
@@ -97,6 +115,7 @@ fun DownloadQueueScreen() {
                 DownloadRow(
                     task = task,
                     onCancel = { viewModel.cancelDownload(task.romId) },
+                    onRetry = { viewModel.retryDownload(task) },
                 )
             }
         }
@@ -104,7 +123,11 @@ fun DownloadQueueScreen() {
 }
 
 @Composable
-private fun DownloadRow(task: DownloadTask, onCancel: () -> Unit) {
+private fun DownloadRow(
+    task: DownloadTask,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -149,14 +172,14 @@ private fun DownloadRow(task: DownloadTask, onCancel: () -> Unit) {
                 text = task.romName,
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = "${task.platformSlug} • ${task.fileName}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                overflow = TextOverflow.Ellipsis,
             )
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -190,14 +213,16 @@ private fun DownloadRow(task: DownloadTask, onCancel: () -> Unit) {
                 )
             } else if (task.isFailed) {
                 Text(
-                    "Error en la descarga. Reintentando...",
+                    text = task.errorMessage ?: "Error en la descarga",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
 
-        // Cancel button
+        // Action buttons
         if (task.isRunning) {
             IconButton(onClick = onCancel) {
                 Icon(
@@ -205,6 +230,16 @@ private fun DownloadRow(task: DownloadTask, onCancel: () -> Unit) {
                     contentDescription = "Cancelar",
                     tint = MaterialTheme.colorScheme.error,
                 )
+            }
+        } else if (task.isFailed) {
+            TextButton(onClick = onRetry) {
+                Icon(
+                    Icons.Filled.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.size(4.dp))
+                Text("Reintentar")
             }
         }
     }

@@ -135,16 +135,20 @@ fun LibraryScreen() {
         }
     }
 
-    // Filter ROMs by search + status
-    val filteredRoms = romsWithStatus.filter { rws ->
-        val matchesSearch = searchQuery.isBlank() ||
-            rws.rom.name.contains(searchQuery, ignoreCase = true)
-        val matchesFilter = when (selectedFilter) {
-            RomFilter.ALL -> true
-            RomFilter.MISSING -> rws.status == DownloadStatus.NOT_DOWNLOADED
-            RomFilter.DOWNLOADED -> rws.status == DownloadStatus.DOWNLOADED
+    // Filter ROMs by search + status (memoized to avoid recalculating on every recomposition)
+    val filteredRoms by remember(romsWithStatus, searchQuery, selectedFilter) {
+        derivedStateOf {
+            romsWithStatus.filter { rws ->
+                val matchesSearch = searchQuery.isBlank() ||
+                    rws.rom.name.contains(searchQuery, ignoreCase = true)
+                val matchesFilter = when (selectedFilter) {
+                    RomFilter.ALL -> true
+                    RomFilter.MISSING -> rws.status == DownloadStatus.NOT_DOWNLOADED
+                    RomFilter.DOWNLOADED -> rws.status == DownloadStatus.DOWNLOADED
+                }
+                matchesSearch && matchesFilter
+            }
         }
-        matchesSearch && matchesFilter
     }
 
     // Adaptive grid: more columns in landscape (handhelds 16:9 / 4:3)
@@ -303,6 +307,27 @@ fun LibraryScreen() {
                 return@Column
             }
 
+            // ── Empty state ─────────────────────────────────────────────
+            if (filteredRoms.isEmpty() && !isLoading && !isLoadingMore) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val emptyMessage = when {
+                        searchQuery.isNotBlank() -> "No hay juegos que coincidan con la búsqueda"
+                        selectedFilter == RomFilter.MISSING -> "Todos los juegos están descargados 🎉"
+                        selectedFilter == RomFilter.DOWNLOADED -> "Aún no hay juegos descargados"
+                        else -> "No hay juegos para esta plataforma"
+                    }
+                    Text(
+                        emptyMessage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                return@Column
+            }
+
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = minCardSize),
                 state = gridState,
@@ -319,7 +344,6 @@ fun LibraryScreen() {
                                 container.downloadManager.enqueueDownload(
                                     rom = romStatus.rom,
                                     serverUrl = settings.serverUrl,
-                                    apiKey = settings.apiKey,
                                 )
                                 viewModel.onDownloadEnqueued(romStatus.rom.name)
                             }
@@ -360,7 +384,6 @@ fun LibraryScreen() {
                         container.downloadManager.enqueueDownload(
                             rom = selectedRom!!,
                             serverUrl = settings.serverUrl,
-                            apiKey = settings.apiKey,
                         )
                         viewModel.onDownloadEnqueued(selectedRom!!.name)
                     }
