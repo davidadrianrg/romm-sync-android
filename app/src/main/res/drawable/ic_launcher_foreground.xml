@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Gamepad D-pad -->
+    <path
+        android:fillColor="#58A6FF"
+        android:pathData="M38,42 L48,42 L48,38 L42,38 L42,32 L38,32 L38,42 z" />
+    <!-- Gamepad buttons -->
+    <path
+        android:fillColor="#3FB950"
+        android:pathData="M66,36 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    <path
+        android:fillColor="#3FB950"
+        android:pathData="M72,42 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    <!-- Download arrow -->
+    <path
+        android:fillColor="#58A6FF"
+        android:pathData="M54,52 L46,64 L50,64 L50,76 L58,76 L58,64 L62,64 z" />
+</vector>

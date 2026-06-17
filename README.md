@@ -61,6 +61,40 @@ Cliente de sincronización minimalista para servidores **RomM**. Aplicación And
 | **Biblioteca** | Rejilla de carátulas con Coil + búsqueda + filtros (Todos/Faltantes/Descargados) |
 | **Cola de Descargas** | Progreso numérico + barra, estado indeterminate para mod_zip, cancelar |
 
+## 🏗️ Arquitectura
+
+```
+app/src/main/java/es/davidrg/rommsync/
+├── RomMSyncApplication.kt     # Application + Configuration.Provider (WorkManager)
+├── MainActivity.kt            # Single-activity host (Compose)
+├── data/
+│   ├── AppContainer.kt        # Manual DI container
+│   ├── local/
+│   │   ├── SettingsDataStore.kt    # DataStore (server config persistente)
+│   │   ├── RomSyncDatabase.kt      # Room database
+│   │   ├── entity/                 # PlatformEntity, DownloadedRomEntity
+│   │   └── dao/                    # PlatformDao, RomDao
+│   ├── remote/
+│   │   ├── RomMApiService.kt       # Retrofit endpoints (platforms, roms, download)
+│   │   ├── AuthInterceptor.kt      # OkHttp Bearer token injection
+│   │   ├── NetworkModule.kt        # Retrofit/OkHttp factory
+│   │   └── dto/                    # PlatformDto, RomDto (Moshi)
+│   └── repository/
+│       ├── RomRepository.kt        # RomM data bridge (remote + cache)
+│       └── SettingsRepository.kt
+├── domain/model/                   # Platform, Rom, DownloadTask (pure domain)
+├── download/
+│   ├── DownloadWorker.kt           # CoroutineWorker (stream + mod_zip extract)
+│   ├── DownloadManager.kt          # WorkManager queue management
+│   └── PathMapper.kt               # RomM slug → ES-DE folder mapping
+├── ui/
+│   ├── theme/                      # Material3 dark-first theme
+│   ├── navigation/                 # NavHost + bottom bar (4 tabs)
+│   ├── viewmodel/                  # ConfigVM, PlatformsVM, LibraryVM, DownloadsVM
+│   └── screens/                    # Config, Platforms, Library, Downloads
+└── util/Permissions.kt             # MANAGE_EXTERNAL_STORAGE + notifications
+```
+
 ## 🔧 Configuración del Servidor RomM
 
 La app requiere:
