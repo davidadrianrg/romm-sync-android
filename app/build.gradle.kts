@@ -10,6 +10,21 @@ plugins {
 // variables de entorno en CI. Si no existe, se firma con debug keystore.
 val ksFile = rootProject.file("keystore.properties")
 val hasKeystore = ksFile.exists()
+// Pre-cargar desde archivo (lectura manual con readLines para evitar java.util.Properties
+// que el Gradle Kotlin DSL no resuelve bien dentro del bloque android{}).
+val ksProps: Map<String, String> = if (hasKeystore) {
+    try {
+        ksFile.readLines().mapNotNull { line ->
+            val trimmed = line.trim()
+            if (trimmed.startsWith("#") || trimmed.isBlank()) null
+            else {
+                val eq = trimmed.indexOf('=')
+                if (eq > 0) trimmed.substring(0, eq).trim() to trimmed.substring(eq + 1).trim()
+                else null
+            }
+        }.toMap()
+    } catch (_: Exception) { emptyMap() }
+} else emptyMap()
 
 android {
     namespace = "es.davidrg.rommsync"
@@ -28,12 +43,10 @@ android {
     signingConfigs {
         create("release") {
             if (hasKeystore) {
-                val props = java.util.Properties()
-                ksFile.inputStream().use { props.load(it) }
-                storeFile = file(props.getProperty("storeFile", ""))
-                storePassword = props.getProperty("storePassword", "")
-                keyAlias = props.getProperty("keyAlias", "")
-                keyPassword = props.getProperty("keyPassword", "")
+                storeFile = file(ksProps["storeFile"] ?: "")
+                storePassword = ksProps["storePassword"] ?: ""
+                keyAlias = ksProps["keyAlias"] ?: ""
+                keyPassword = ksProps["keyPassword"] ?: ""
             }
         }
     }
