@@ -44,18 +44,24 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
 
       # ── Generate version metadata ────────────────────────────────────
+      # Versioning: v{MAJOR}.{MINOR}.{run_number}
+      # MAJOR and MINOR are hardcoded; patch = GitHub run_number (auto-increment)
       - name: Compute version
         id: version
         run: |
-          TAG="v${{ github.run_number }}-${{ github.sha }}"
+          MAJOR="0"
+          MINOR="1"
+          PATCH="${{ github.run_number }}"
+          TAG="v${MAJOR}.${MINOR}.${PATCH}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${MAJOR}.${MINOR}.${PATCH}" >> "$GITHUB_OUTPUT"
 
       # ── Create / update a release with the APK ────────────────────────
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: "Build #${{ github.run_number }} – ${{ github.event.head_commit.message }}"
+          name: ${{ steps.version.outputs.tag }}
           body: |
             **RomM Sync Android** – APK generado automáticamente
 
