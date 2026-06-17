@@ -180,33 +180,24 @@ class DownloadWorker(
     ): Result {
         val targetFile = PathMapper.getRomFile(romsRootPath, platformSlug, fileName)
 
-        // Detect a partial file from a previous interrupted attempt.
+        // Attempt resume: if a partial file exists, try Range header
         val existingSize = if (targetFile.exists()) targetFile.length() else 0L
         val rangeHeader: String? = if (existingSize > 0L) "bytes=$existingSize-" else null
         if (existingSize > 0L) {
             Log.i(TAG, "Attempting resume of '$romName': $existingSize bytes already on disk")
         }
 
-        val response: Response<ResponseBody> = try {
-            apiService.downloadRom(romId, fileName, rangeHeader)
-        } catch (e: Exception) {
-            // Make sure any partial body is closed on failure.
-            throw e
-        }
+        val response = apiService.downloadRom(romId, fileName, rangeHeader)
 
-        // Non-2xx responses.
         if (!response.isSuccessful) {
-            // 416 Range Not Satisfiable → the local file already covers (or
-            // exceeds) the full resource. Treat the download as complete.
+            // 416 Range Not Satisfiable → file already complete
             if (response.code() == 416 && existingSize > 0L) {
-                Log.i(TAG, "'$romName' already complete (HTTP 416 on Range request)")
+                Log.i(TAG, "'$romName' already complete (HTTP 416)")
                 response.errorBody()?.close()
                 reportProgress(100, false, romId, romName, fileName, platformSlug)
                 return Result.success(workDataOf(
-                    KEY_ROM_ID to romId,
-                    KEY_ROM_NAME to romName,
-                    KEY_FILE_NAME to fileName,
-                    KEY_PLATFORM_SLUG to platformSlug,
+                    KEY_ROM_ID to romId, KEY_ROM_NAME to romName,
+                    KEY_FILE_NAME to fileName, KEY_PLATFORM_SLUG to platformSlug,
                     KEY_LOCAL_PATH to targetFile.absolutePath,
                 ))
             }
@@ -214,60 +205,37 @@ class DownloadWorker(
             throw HttpException(response)
         }
 
-        val body: ResponseBody = response.body() ?: run {
-            response.errorBody()?.close()
-            throw IOException("Empty response body")
-        }
-
-        // 206 = server honoured our Range header → resume.
-        // 200 = server ignored Range → fresh download.
+        val body: ResponseBody = response.body() ?: throw IOException("Empty response body")
         val isPartial = response.code() == 206
         val offset = if (isPartial) existingSize else 0L
         val contentLength = body.contentLength()
 
-        // Edge case: server returned 200 OK with the full body but the local
-        // file already has the same (or more) bytes → treat as complete.
+        // If full 200 but local file already covers it
         if (!isPartial && existingSize > 0L && contentLength > 0L && existingSize >= contentLength) {
-            Log.i(TAG, "'$romName' already complete (local size ≥ Content-Length)")
+            Log.i(TAG, "'$romName' already complete (local ≥ Content-Length)")
             body.close()
             reportProgress(100, false, romId, romName, fileName, platformSlug)
             return Result.success(workDataOf(
-                KEY_ROM_ID to romId,
-                KEY_ROM_NAME to romName,
-                KEY_FILE_NAME to fileName,
-                KEY_PLATFORM_SLUG to platformSlug,
+                KEY_ROM_ID to romId, KEY_ROM_NAME to romName,
+                KEY_FILE_NAME to fileName, KEY_PLATFORM_SLUG to platformSlug,
                 KEY_LOCAL_PATH to targetFile.absolutePath,
             ))
         }
 
         return try {
             if (contentLength <= 0L && !isPartial) {
-                // mod_zip: Content-Length = -1 → extract on the fly.
-                // Resume is not supported for zip streams; delete any stale
-                // partial file from a previous attempt to avoid corruption.
+                // mod_zip: extract on the fly
                 if (targetFile.exists()) targetFile.delete()
                 reportProgress(0, true, romId, romName, fileName, platformSlug)
                 extractZipStream(body, romsRootPath, platformSlug)
             } else {
-                // Normal: stream to disk with progress (and resume support).
                 val totalBytes = offset + contentLength.coerceAtLeast(0L)
-                streamToDisk(
-                    body = body,
-                    targetFile = targetFile,
-                    totalBytes = totalBytes,
-                    offset = offset,
-                    romId = romId,
-                    romName = romName,
-                    fileName = fileName,
-                    platformSlug = platformSlug,
-                )
+                streamToDisk(body, targetFile, totalBytes, offset, romId, romName, fileName, platformSlug)
             }
 
             Result.success(workDataOf(
-                KEY_ROM_ID to romId,
-                KEY_ROM_NAME to romName,
-                KEY_FILE_NAME to fileName,
-                KEY_PLATFORM_SLUG to platformSlug,
+                KEY_ROM_ID to romId, KEY_ROM_NAME to romName,
+                KEY_FILE_NAME to fileName, KEY_PLATFORM_SLUG to platformSlug,
                 KEY_LOCAL_PATH to targetFile.absolutePath,
             ))
         } finally {
