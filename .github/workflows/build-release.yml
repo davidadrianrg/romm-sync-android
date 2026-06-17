@@ -34,18 +34,10 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
-
-      - name: Upload APK as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: romm-sync-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
-
-      # ── Generate version metadata ────────────────────────────────────
+      # ── Inject version into build.gradle.kts ──────────────────────────
       # Versioning: v{MAJOR}.{MINOR}.{run_number}
-      # MAJOR and MINOR are hardcoded; patch = GitHub run_number (auto-increment)
+      # The APK's versionName and versionCode are set from CI so they
+      # always match the GitHub Release tag exactly.
       - name: Compute version
         id: version
         run: |
@@ -55,6 +47,19 @@ jobs:
           TAG="v${MAJOR}.${MINOR}.${PATCH}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${MAJOR}.${MINOR}.${PATCH}" >> "$GITHUB_OUTPUT"
+          # Patch build.gradle.kts with the computed version
+          sed -i "s/versionCode = .*/versionCode = ${PATCH}/" app/build.gradle.kts
+          sed -i "s/versionName = .*/versionName = \"${MAJOR}.${MINOR}.${PATCH}\"/" app/build.gradle.kts
+          echo "✅ Set versionCode=$PATCH versionName=${MAJOR}.${MINOR}.${PATCH}"
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: romm-sync-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
 
       # ── Create / update a release with the APK ────────────────────────
       - name: Create Release

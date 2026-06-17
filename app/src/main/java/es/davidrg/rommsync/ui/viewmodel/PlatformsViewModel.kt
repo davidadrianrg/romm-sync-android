@@ -47,4 +47,14 @@ class PlatformsViewModel(
             romRepository.updatePlatformVisibility(platform.id, !platform.visible)
         }
     }
+
+    fun setAllVisible(visible: Boolean) {
+        viewModelScope.launch {
+            platforms.value.forEach { platform ->
+                if (platform.visible != visible) {
+                    romRepository.updatePlatformVisibility(platform.id, visible)
+                }
+            }
+        }
+    }
 }

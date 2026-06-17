@@ -8,13 +8,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Deselect
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +57,8 @@ fun PlatformsScreen() {
         initial = es.davidrg.rommsync.data.local.ServerConfig("", "", "", 2)
     )
 
+    val allVisible = platforms.isNotEmpty() && platforms.all { it.visible }
+
     LaunchedEffect(settings.isConfigured) {
         if (settings.isConfigured && platforms.isEmpty()) {
             viewModel.refreshPlatforms(settings.serverUrl, settings.apiKey)
@@ -57,7 +66,27 @@ fun PlatformsScreen() {
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Plataformas") }) }
+        topBar = {
+            TopAppBar(
+                title = { Text("Plataformas") },
+                actions = {
+                    if (platforms.isNotEmpty()) {
+                        // Toggle all/none button
+                        OutlinedButton(
+                            onClick = { viewModel.setAllVisible(!allVisible) },
+                            modifier = Modifier.padding(end = 8.dp),
+                        ) {
+                            Icon(
+                                if (allVisible) Icons.Filled.Deselect else Icons.Filled.SelectAll,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 4.dp),
+                            )
+                            Text(if (allVisible) "Ninguna" else "Todas", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                },
+            )
+        }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -80,7 +109,7 @@ fun PlatformsScreen() {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "${platforms.size} plataformas",
+                    "${platforms.count { it.visible }} / ${platforms.size} plataformas",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -142,6 +171,12 @@ private fun PlatformRow(platform: Platform, onToggle: (Platform) -> Unit) {
         Switch(
             checked = platform.visible,
             onCheckedChange = { onToggle(platform) },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
         )
     }
 }

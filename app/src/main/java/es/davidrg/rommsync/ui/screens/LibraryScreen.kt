@@ -1,6 +1,6 @@
 package es.davidrg.rommsync.ui.screens
 
-import android.widget.Toast
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +24,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -37,9 +40,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -58,7 +63,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -84,7 +88,7 @@ fun LibraryScreen() {
 
     val viewModel: LibraryViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { LibraryViewModel(container.romRepository) }
+            initializer { LibraryViewModel(container.romRepository, container.downloadManager) }
         }
     )
 
@@ -114,13 +118,13 @@ fun LibraryScreen() {
                 is LibraryEvent.DownloadStarted -> {
                     snackbarHostState.showSnackbar(
                         message = "⬇ ${event.romName}",
-                        duration = androidx.compose.material3.SnackbarDuration.Short,
+                        duration = SnackbarDuration.Short,
                     )
                 }
                 is LibraryEvent.Error -> {
                     snackbarHostState.showSnackbar(
                         message = "❌ ${event.message}",
-                        duration = androidx.compose.material3.SnackbarDuration.Long,
+                        duration = SnackbarDuration.Long,
                     )
                 }
             }
@@ -139,9 +143,9 @@ fun LibraryScreen() {
         matchesSearch && matchesFilter
     }
 
-    // Adaptive grid: more columns in landscape
+    // Adaptive grid: more columns in landscape (handhelds 16:9 / 4:3)
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
-    val minCardSize = if (isLandscape) 120.dp else 140.dp
+    val minCardSize = if (isLandscape) 110.dp else 140.dp
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Biblioteca") }) },
@@ -153,49 +157,93 @@ fun LibraryScreen() {
                 .padding(padding)
                 .padding(horizontal = 12.dp),
         ) {
-            // ── Platform selector ───────────────────────────────────────
-            ExposedDropdownMenuBox(
-                expanded = platformMenuExpanded,
-                onExpandedChange = { platformMenuExpanded = it },
-                modifier = Modifier.padding(vertical = 4.dp),
-            ) {
-                OutlinedTextField(
-                    value = platforms.find { it.id == selectedPlatformId }?.name ?: "Selecciona plataforma",
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Plataforma") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(platformMenuExpanded) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(),
-                )
-                ExposedDropdownMenu(expanded = platformMenuExpanded, onDismissRequest = { platformMenuExpanded = false }) {
-                    platforms.forEach { platform ->
-                        DropdownMenuItem(
-                            text = { Text("${platform.name} (${platform.romCount})") },
-                            onClick = {
-                                viewModel.selectPlatform(platform.id, settings.serverUrl, settings.apiKey)
-                                platformMenuExpanded = false
-                            },
+            // ── Platform selector + search ──────────────────────────────
+            // In landscape: side-by-side to save vertical space
+            if (isLandscape) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ExposedDropdownMenuBox(
+                        expanded = platformMenuExpanded,
+                        onExpandedChange = { platformMenuExpanded = it },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        OutlinedTextField(
+                            value = platforms.find { it.id == selectedPlatformId }?.name
+                                ?: "Plataforma",
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(platformMenuExpanded) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().menuAnchor(),
                         )
+                        ExposedDropdownMenu(
+                            expanded = platformMenuExpanded,
+                            onDismissRequest = { platformMenuExpanded = false },
+                        ) {
+                            platforms.forEach { platform ->
+                                DropdownMenuItem(
+                                    text = { Text("${platform.name} (${platform.romCount})") },
+                                    onClick = {
+                                        viewModel.selectPlatform(platform.id, settings.serverUrl, settings.apiKey)
+                                        platformMenuExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Buscar...") },
+                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            } else {
+                ExposedDropdownMenuBox(
+                    expanded = platformMenuExpanded,
+                    onExpandedChange = { platformMenuExpanded = it },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                ) {
+                    OutlinedTextField(
+                        value = platforms.find { it.id == selectedPlatformId }?.name
+                            ?: "Selecciona plataforma",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Plataforma") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(platformMenuExpanded) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = platformMenuExpanded,
+                        onDismissRequest = { platformMenuExpanded = false },
+                    ) {
+                        platforms.forEach { platform ->
+                            DropdownMenuItem(
+                                text = { Text("${platform.name} (${platform.romCount})") },
+                                onClick = {
+                                    viewModel.selectPlatform(platform.id, settings.serverUrl, settings.apiKey)
+                                    platformMenuExpanded = false
+                                },
+                            )
+                        }
                     }
                 }
-            }
-
-            // ── Search + filter row ──────────────────────────────────────
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     placeholder = { Text("Buscar...") },
                     leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                     singleLine = true,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
 
+            // ── Filter chips ────────────────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -249,7 +297,7 @@ fun LibraryScreen() {
                                     serverUrl = settings.serverUrl,
                                     apiKey = settings.apiKey,
                                 )
-                                viewModel.onDownloadEnqueued(romStatus.rom.id, romStatus.rom.name)
+                                viewModel.onDownloadEnqueued(romStatus.rom.name)
                             }
                         },
                         onLongPress = { selectedRom = romStatus.rom },
@@ -277,7 +325,7 @@ fun LibraryScreen() {
                             serverUrl = settings.serverUrl,
                             apiKey = settings.apiKey,
                         )
-                        viewModel.onDownloadEnqueued(selectedRom!!.id, selectedRom!!.name)
+                        viewModel.onDownloadEnqueued(selectedRom!!.name)
                     }
                     selectedRom = null
                 },
@@ -388,6 +436,8 @@ private fun RomDetailSheet(
     onDownload: () -> Unit,
     onClose: () -> Unit,
 ) {
+    var expanded by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -424,7 +474,6 @@ private fun RomDetailSheet(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )
-                // Regions + revision
                 val metaParts = buildList {
                     if (rom.regions.isNotEmpty()) addAll(rom.regions)
                     rom.revision?.takeIf { it.isNotBlank() }?.let { add("Rev $it") }
@@ -442,21 +491,40 @@ private fun RomDetailSheet(
             }
         }
 
-        // Summary
-        rom.summary?.takeIf { it.isNotBlank() }?.let {
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(12.dp))
+        // Summary with expandable text
+        rom.summary?.takeIf { it.isNotBlank() }?.let { summary ->
+            Spacer(modifier = Modifier.size(12.dp))
+            val maxLines = if (expanded) Int.MAX_VALUE else 3
             Text(
-                text = it,
+                text = summary,
                 style = MaterialTheme.typography.bodySmall,
-                maxLines = 5,
+                maxLines = maxLines,
                 overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+            // Show "ver más/menos" button only if text is long enough
+            if (summary.length > 120) {
+                TextButton(
+                    onClick = { expanded = !expanded },
+                    modifier = Modifier.padding(top = 0.dp),
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                ) {
+                    Icon(
+                        if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text(
+                        if (expanded) " Ver menos" else " Ver más",
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            }
         }
 
-        androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(16.dp))
+        Spacer(modifier = Modifier.size(16.dp))
 
-        // Metadata grid
+        // Metadata rows
         DetailRow("Archivo", rom.fileName)
         DetailRow("Tamaño", formatFileSize(rom.fileSizeBytes))
         rom.fileNameNoTags?.let { DetailRow("Nombre limpio", it) }
@@ -466,7 +534,7 @@ private fun RomDetailSheet(
         if (rom.isMulti) DetailRow("Multi-archivo", "Sí (${rom.files.size} archivos)")
         rom.igdbId?.let { DetailRow("IGDB ID", it.toString()) }
 
-        androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.size(20.dp))
 
         // Action button
         when {

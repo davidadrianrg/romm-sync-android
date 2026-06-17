@@ -7,6 +7,7 @@ import es.davidrg.rommsync.data.repository.RomRepository
 import es.davidrg.rommsync.domain.model.DownloadStatus
 import es.davidrg.rommsync.domain.model.Rom
 import es.davidrg.rommsync.domain.model.RomWithStatus
+import es.davidrg.rommsync.download.DownloadManager
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -15,11 +16,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class LibraryViewModel(
     private val romRepository: RomRepository,
+    private val downloadManager: DownloadManager? = null,
 ) : ViewModel() {
 
     private val _selectedPlatformId = MutableStateFlow<Int?>(null)
@@ -34,10 +37,6 @@ class LibraryViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
 
-    /** IDs of ROMs currently in the download queue (enqueued or running). */
-    private val _downloadingIds = MutableStateFlow<Set<Int>>(emptySet())
-    val downloadingIds = _downloadingIds.asStateFlow()
-
     /** One-shot events for UI feedback (snackbars). */
     private val _events = MutableSharedFlow<LibraryEvent>(extraBufferCapacity = 5)
     val events: SharedFlow<LibraryEvent> = _events.asSharedFlow()
@@ -49,8 +48,26 @@ class LibraryViewModel(
             initialValue = emptySet(),
         )
 
+    /**
+     * Live set of ROM IDs currently downloading (ENQUEUED or RUNNING).
+     * Driven by WorkManager observeDownloads() — auto-updates when downloads
+     * complete or fail, so the card spinner resolves to a checkmark.
+     */
+    private val activeDownloads: StateFlow<Set<Int>> =
+        (downloadManager?.observeDownloads() ?: kotlinx.coroutines.flow.flowOf(emptyList<es.davidrg.rommsync.domain.model.DownloadTask>()))
+            .map { tasks ->
+                tasks.filter { it.isRunning || (!it.isCompleted && !it.isFailed) }
+                    .map { it.romId }
+                    .toSet()
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptySet(),
+            )
+
     val romsWithStatus: StateFlow<List<RomWithStatus>> = combine(
-        _roms, downloadedIds, _downloadingIds,
+        _roms, downloadedIds, activeDownloads,
     ) { roms, downloaded, downloading ->
         roms.map { rom ->
             val status = when {
@@ -75,17 +92,11 @@ class LibraryViewModel(
         loadRoms(serverUrl, apiKey, reset = false)
     }
 
-    /** Called by UI when user taps download. Marks as downloading immediately for instant feedback. */
-    fun onDownloadEnqueued(romId: Int, romName: String) {
-        _downloadingIds.value = _downloadingIds.value + romId
+    /** Called by UI when user taps download. Emits snackbar feedback. */
+    fun onDownloadEnqueued(romName: String) {
         viewModelScope.launch {
             _events.emit(LibraryEvent.DownloadStarted(romName))
         }
-    }
-
-    /** Called when a download completes or fails to clear the downloading state. */
-    fun onDownloadResolved(romId: Int) {
-        _downloadingIds.value = _downloadingIds.value - romId
     }
 
     private fun loadRoms(serverUrl: String, apiKey: String, reset: Boolean) {

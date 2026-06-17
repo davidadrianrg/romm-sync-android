@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -70,20 +71,22 @@ fun RomMSyncApp() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = if (needsOnboarding) Screen.Config.route else Screen.Config.route,
+            // First launch → Config for onboarding; otherwise → Library (home)
+            startDestination = if (needsOnboarding) Screen.Config.route else Screen.Library.route,
             modifier = Modifier.padding(innerPadding),
         ) {
-            composable(Screen.Config.route) { ConfigScreen() }
-            composable(Screen.Platforms.route) { PlatformsScreen() }
             composable(Screen.Library.route) { LibraryScreen() }
+            composable(Screen.Platforms.route) { PlatformsScreen() }
             composable(Screen.Downloads.route) { DownloadQueueScreen() }
+            composable(Screen.Config.route) { ConfigScreen() }
         }
     }
 }
 
+// Order: Library (home) → Platforms → Downloads → Config (last)
 private val bottomNavItems = listOf(
-    Screen.Config,
-    Screen.Platforms,
     Screen.Library,
+    Screen.Platforms,
     Screen.Downloads,
+    Screen.Config,
 )
