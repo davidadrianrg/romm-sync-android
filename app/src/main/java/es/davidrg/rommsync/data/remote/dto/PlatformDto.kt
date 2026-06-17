@@ -5,16 +5,12 @@ import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
 data class PlatformDto(
-    val id: Int,
-    val slug: String,
-    @Json(name = "fs_slug") val fsSlug: String?,
-    val name: String,
+    @Json(name = "id") val id: Int,
+    @Json(name = "slug") val slug: String,
+    @Json(name = "fs_slug") val fsSlug: String? = null,
+    @Json(name = "name") val name: String,
     @Json(name = "rom_count") val romCount: Int = 0,
+    @Json(name = "display_name") val displayName: String? = null,
     @Json(name = "igdb_id") val igdbId: Int? = null,
-)
-
-@JsonClass(generateAdapter = true)
-data class PlatformResponse(
-    val total: Int = 0,
-    val items: List<PlatformDto> = emptyList(),
+    @Json(name = "url_logo") val logoUrl: String? = null,
 )

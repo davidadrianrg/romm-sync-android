@@ -1,34 +1,34 @@
 package es.davidrg.rommsync.data.remote
 
-import es.davidrg.rommsync.data.remote.dto.PlatformResponse
+import es.davidrg.rommsync.data.remote.dto.PlatformDto
 import es.davidrg.rommsync.data.remote.dto.RomResponse
 import okhttp3.ResponseBody
 import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.QueryMap
 
 interface RomMApiService {
 
     /**
      * Get all platforms available on the RomM server.
      * GET /api/platforms
+     *
+     * RomM returns a bare JSON array, NOT a wrapped object.
      */
-    @GET("/api/platforms")
-    suspend fun getPlatforms(): PlatformResponse
+    @GET("api/platforms")
+    suspend fun getPlatforms(): List<PlatformDto>
 
     /**
      * Get ROMs filtered by platform with pagination.
      * GET /api/roms?platform_ids=[id]&limit=50&offset=0
      *
-     * IMPORTANT: Use platform_ids (plural array), NOT platform_id (singular).
-     * The singular form does not filter correctly in several server versions.
-     * Pagination via limit+offset is MANDATORY to avoid server OOM on large libraries.
+     * RomM uses fastapi-pagination → response is {items, total, page, size, pages}.
+     * IMPORTANT: Use platform_ids (plural), NOT platform_id (singular).
      */
-    @GET("/api/roms")
+    @GET("api/roms")
     suspend fun getRoms(
-        @Query("platform_ids") platformIds: List<Int>,
-        @Query("limit") limit: Int = 50,
-        @Query("offset") offset: Int = 0,
+        @QueryMap params: Map<String, String>,
     ): RomResponse
 
     /**
@@ -38,10 +38,10 @@ interface RomMApiService {
      * For multi-file ROMs, the server may use mod_zip (Content-Length = -1)
      * and return a dynamically zipped stream.
      */
-    @GET("/api/roms/{id}/content/{file_name}")
-    @retrofit2.http.Streaming
+    @Streaming
+    @GET("api/roms/{id}/content/{file_name}")
     suspend fun downloadRom(
         @Path("id") romId: Int,
-        @Path("file_name") fileName: String,
+        @Path("file_name", encoded = true) fileName: String,
     ): ResponseBody
 }

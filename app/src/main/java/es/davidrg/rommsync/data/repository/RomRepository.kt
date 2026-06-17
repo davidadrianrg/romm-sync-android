@@ -6,7 +6,6 @@ import es.davidrg.rommsync.data.local.entity.DownloadedRomEntity
 import es.davidrg.rommsync.data.local.entity.PlatformEntity
 import es.davidrg.rommsync.data.remote.NetworkModule
 import es.davidrg.rommsync.data.remote.RomMApiService
-import es.davidrg.rommsync.data.remote.dto.PlatformDto
 import es.davidrg.rommsync.data.remote.dto.RomDto
 import es.davidrg.rommsync.domain.model.Platform
 import es.davidrg.rommsync.domain.model.Rom
@@ -23,8 +22,6 @@ class RomRepository(
     private val romDao: RomDao,
 ) {
 
-    // ── Remote API (dynamically created from user config) ──────────────
-
     private var apiService: RomMApiService? = null
     private var currentServerUrl: String = ""
     private var currentApiKey: String = ""
@@ -37,6 +34,8 @@ class RomRepository(
         }
     }
 
+    fun getServerUrl(): String = currentServerUrl.trimEnd('/')
+
     private fun api(): RomMApiService =
         apiService ?: throw IllegalStateException("API not configured. Call configureApi() first.")
 
@@ -44,8 +43,8 @@ class RomRepository(
 
     /** Fetch platforms from server, cache to Room, return domain models. */
     suspend fun fetchAndCachePlatforms(): List<Platform> {
-        val response = api().getPlatforms()
-        val entities = response.items.map { it.toEntity() }
+        val platforms = api().getPlatforms()
+        val entities = platforms.map { it.toEntity() }
         platformDao.upsertAll(entities)
         return entities.map { it.toDomain() }
     }
@@ -64,13 +63,19 @@ class RomRepository(
 
     // ── ROMs ───────────────────────────────────────────────────────────
 
-    /** Fetch paginated ROMs for a platform from the server. */
+    /**
+     * Fetch paginated ROMs for a platform from the server.
+     * Uses platform_ids (plural) + offset pagination per RomM API spec.
+     */
     suspend fun fetchRoms(platformId: Int, limit: Int = 50, offset: Int = 0): List<Rom> {
-        val response = api().getRoms(
-            platformIds = listOf(platformId),
-            limit = limit,
-            offset = offset,
-        )
+        val params = buildMap {
+            put("platform_ids", platformId.toString())
+            put("limit", limit.toString())
+            put("offset", offset.toString())
+            put("order_by", "name")
+            put("order_dir", "asc")
+        }
+        val response = api().getRoms(params)
         return response.items.map { it.toDomain() }
     }
 
@@ -111,10 +116,10 @@ class RomRepository(
 
     // ── Mappers ────────────────────────────────────────────────────────
 
-    private fun PlatformDto.toEntity() = PlatformEntity(
+    private fun es.davidrg.rommsync.data.remote.dto.PlatformDto.toEntity() = PlatformEntity(
         id = id,
         slug = slug,
-        name = name,
+        name = displayName ?: name,
         romCount = romCount,
         visible = true,
     )
@@ -128,7 +133,7 @@ class RomRepository(
     )
 
     private fun RomDto.toDomain(): Rom {
-        val baseCoverUrl = if (currentServerUrl.isNotEmpty()) "$currentServerUrl/" else ""
+        val baseCoverUrl = if (currentServerUrl.isNotEmpty()) "${currentServerUrl.trimEnd('/')}/" else ""
         return Rom(
             id = id,
             name = name.ifBlank { fileName },
@@ -136,12 +141,23 @@ class RomRepository(
             fileSizeBytes = fileSizeBytes,
             platformId = platformId,
             platformSlug = platformSlug ?: "",
-            coverUrlSmall = pathCoverSmall?.let { baseCoverUrl + it.removePrefix("/") },
+            coverUrlSmall = resolveCover(pathCoverSmall, urlCover, baseCoverUrl),
             coverUrlLarge = pathCoverLarge?.let { baseCoverUrl + it.removePrefix("/") },
             files = files.map { RomFile(it.filename, it.size) },
-            isMulti = isMulti,
+            isMulti = isMulti || hasMultipleFiles,
             revision = revision,
             regions = regions,
         )
+    }
+
+    /**
+     * Prefer url_cover (absolute URL), fall back to path_cover_small (relative path).
+     */
+    private fun resolveCover(pathCover: String?, urlCover: String?, baseUrl: String): String? {
+        return when {
+            !urlCover.isNullOrBlank() -> urlCover
+            !pathCover.isNullOrBlank() -> baseUrl + pathCover.removePrefix("/")
+            else -> null
+        }
     }
 }
