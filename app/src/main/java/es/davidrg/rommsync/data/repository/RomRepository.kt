@@ -75,7 +75,8 @@ class RomRepository(
     }
 
     /** Reactive set of all downloaded ROM IDs for quick UI status lookup. */
-    fun getDownloadedRomIds(): Flow<Set<Int>> = romDao.getAllDownloadedRomIds()
+    fun getDownloadedRomIds(): Flow<Set<Int>> =
+        romDao.getAllDownloadedRomIds().map { it.toSet() }
 
     fun getDownloadedRomsForPlatform(platformId: Int): Flow<List<DownloadedRomEntity>> =
         romDao.getDownloadedRomsForPlatform(platformId)

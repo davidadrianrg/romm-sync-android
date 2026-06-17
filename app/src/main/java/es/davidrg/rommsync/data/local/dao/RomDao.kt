@@ -14,7 +14,7 @@ interface RomDao {
     fun getDownloadedRomsForPlatform(platformId: Int): Flow<List<DownloadedRomEntity>>
 
     @Query("SELECT romId FROM downloaded_roms")
-    fun getAllDownloadedRomIds(): Flow<Set<Int>>
+    fun getAllDownloadedRomIds(): Flow<List<Int>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDownloadedRom(rom: DownloadedRomEntity)
