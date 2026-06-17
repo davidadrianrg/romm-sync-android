@@ -16,6 +16,12 @@ data class Rom(
     val isMulti: Boolean,
     val revision: String?,
     val regions: List<String>,
+    val languages: List<String> = emptyList(),
+    val genres: List<String> = emptyList(),
+    val summary: String? = null,
+    val fileNameNoTags: String? = null,
+    val fileExtension: String? = null,
+    val igdbId: Int? = null,
 )
 
 data class RomFile(

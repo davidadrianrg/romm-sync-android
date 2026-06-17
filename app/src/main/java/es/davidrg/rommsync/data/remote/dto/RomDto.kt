@@ -28,12 +28,15 @@ data class RomDto(
     @Json(name = "path_cover_small") val pathCoverSmall: String? = null,
     @Json(name = "path_cover_large") val pathCoverLarge: String? = null,
     @Json(name = "url_cover") val urlCover: String? = null,
+    @Json(name = "summary") val summary: String? = null,
+    @Json(name = "igdb_id") val igdbId: Int? = null,
     @Json(name = "files") val files: List<RomFileDto> = emptyList(),
     @Json(name = "multi") val isMulti: Boolean = false,
     @Json(name = "has_multiple_files") val hasMultipleFiles: Boolean = false,
     @Json(name = "revision") val revision: String? = null,
     @Json(name = "regions") val regions: List<String> = emptyList(),
     @Json(name = "languages") val languages: List<String> = emptyList(),
+    @Json(name = "genres") val genres: List<String> = emptyList(),
 )
 
 /**

@@ -147,6 +147,12 @@ class RomRepository(
             isMulti = isMulti || hasMultipleFiles,
             revision = revision,
             regions = regions,
+            languages = languages,
+            genres = genres,
+            summary = summary,
+            fileNameNoTags = fileNameNoTags,
+            fileExtension = fileExtension,
+            igdbId = igdbId,
         )
     }
 

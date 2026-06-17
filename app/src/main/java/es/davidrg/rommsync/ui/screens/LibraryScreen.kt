@@ -1,24 +1,29 @@
 package es.davidrg.rommsync.ui.screens
 
+import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -29,10 +34,14 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -44,9 +53,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -54,7 +66,9 @@ import coil.compose.AsyncImage
 import es.davidrg.rommsync.RomMSyncApplication
 import es.davidrg.rommsync.domain.model.DownloadStatus
 import es.davidrg.rommsync.domain.model.Platform
+import es.davidrg.rommsync.domain.model.Rom
 import es.davidrg.rommsync.domain.model.RomWithStatus
+import es.davidrg.rommsync.ui.viewmodel.LibraryEvent
 import es.davidrg.rommsync.ui.viewmodel.LibraryViewModel
 
 private enum class RomFilter(val label: String) {
@@ -66,6 +80,7 @@ private enum class RomFilter(val label: String) {
 fun LibraryScreen() {
     val context = LocalContext.current
     val container = (context.applicationContext as RomMSyncApplication).container
+    val configuration = LocalConfiguration.current
 
     val viewModel: LibraryViewModel = viewModel(
         factory = viewModelFactory {
@@ -85,6 +100,33 @@ fun LibraryScreen() {
     var selectedFilter by remember { mutableStateOf(RomFilter.ALL) }
     var platformMenuExpanded by remember { mutableStateOf(false) }
 
+    // Bottom sheet state for long-press game details
+    var selectedRom by remember { mutableStateOf<Rom?>(null) }
+    val sheetState = rememberModalBottomSheetState()
+
+    // Snackbar for download feedback
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Collect one-shot events
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is LibraryEvent.DownloadStarted -> {
+                    snackbarHostState.showSnackbar(
+                        message = "⬇ ${event.romName}",
+                        duration = androidx.compose.material3.SnackbarDuration.Short,
+                    )
+                }
+                is LibraryEvent.Error -> {
+                    snackbarHostState.showSnackbar(
+                        message = "❌ ${event.message}",
+                        duration = androidx.compose.material3.SnackbarDuration.Long,
+                    )
+                }
+            }
+        }
+    }
+
     // Filter ROMs by search + status
     val filteredRoms = romsWithStatus.filter { rws ->
         val matchesSearch = searchQuery.isBlank() ||
@@ -97,8 +139,13 @@ fun LibraryScreen() {
         matchesSearch && matchesFilter
     }
 
+    // Adaptive grid: more columns in landscape
+    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
+    val minCardSize = if (isLandscape) 120.dp else 140.dp
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Biblioteca") }) }
+        topBar = { TopAppBar(title = { Text("Biblioteca") }) },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -110,7 +157,7 @@ fun LibraryScreen() {
             ExposedDropdownMenuBox(
                 expanded = platformMenuExpanded,
                 onExpandedChange = { platformMenuExpanded = it },
-                modifier = Modifier.padding(vertical = 8.dp),
+                modifier = Modifier.padding(vertical = 4.dp),
             ) {
                 OutlinedTextField(
                     value = platforms.find { it.id == selectedPlatformId }?.name ?: "Selecciona plataforma",
@@ -133,18 +180,23 @@ fun LibraryScreen() {
                 }
             }
 
-            // ── Search bar ──────────────────────────────────────────────
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Buscar juego...") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            )
+            // ── Search + filter row ──────────────────────────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Buscar...") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+            }
 
-            // ── Filter chips ────────────────────────────────────────────
-            androidx.compose.foundation.layout.Row(
+            Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -181,7 +233,7 @@ fun LibraryScreen() {
             }
 
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 140.dp),
+                columns = GridCells.Adaptive(minSize = minCardSize),
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -197,29 +249,64 @@ fun LibraryScreen() {
                                     serverUrl = settings.serverUrl,
                                     apiKey = settings.apiKey,
                                 )
+                                viewModel.onDownloadEnqueued(romStatus.rom.id, romStatus.rom.name)
                             }
                         },
+                        onLongPress = { selectedRom = romStatus.rom },
                     )
                 }
             }
         }
     }
+
+    // ── Bottom sheet: game details ─────────────────────────────────────
+    if (selectedRom != null) {
+        ModalBottomSheet(
+            onDismissRequest = { selectedRom = null },
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surface,
+        ) {
+            RomDetailSheet(
+                rom = selectedRom!!,
+                isDownloaded = romsWithStatus.any { it.rom.id == selectedRom!!.id && it.status == DownloadStatus.DOWNLOADED },
+                isDownloading = romsWithStatus.any { it.rom.id == selectedRom!!.id && it.status == DownloadStatus.DOWNLOADING },
+                onDownload = {
+                    if (settings.isConfigured) {
+                        container.downloadManager.enqueueDownload(
+                            rom = selectedRom!!,
+                            serverUrl = settings.serverUrl,
+                            apiKey = settings.apiKey,
+                        )
+                        viewModel.onDownloadEnqueued(selectedRom!!.id, selectedRom!!.name)
+                    }
+                    selectedRom = null
+                },
+                onClose = { selectedRom = null },
+            )
+        }
+    }
 }
 
+// ── Game card with long-press ──────────────────────────────────────────
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RomCard(
     romWithStatus: RomWithStatus,
     onDownload: (RomWithStatus) -> Unit,
+    onLongPress: (RomWithStatus) -> Unit,
 ) {
     Column(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .clickable { },
+            .combinedClickable(
+                onClick = {},
+                onLongClick = { onLongPress(romWithStatus) },
+            ),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.7f)
+                .aspectRatio(0.72f)
                 .clip(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center,
@@ -239,11 +326,12 @@ private fun RomCard(
                     tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(4.dp),
+                        .padding(6.dp)
+                        .size(20.dp),
                 )
             }
 
-            // Download button
+            // Download button overlay (only for not-downloaded)
             if (romWithStatus.status == DownloadStatus.NOT_DOWNLOADED) {
                 IconButton(
                     onClick = { onDownload(romWithStatus) },
@@ -251,23 +339,33 @@ private fun RomCard(
                         .align(Alignment.BottomEnd)
                         .padding(4.dp)
                         .background(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                            RoundedCornerShape(4.dp),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                            RoundedCornerShape(6.dp),
                         ),
                 ) {
                     Icon(
                         Icons.Filled.Download,
                         contentDescription = "Descargar",
                         tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(20.dp),
                     )
                 }
             }
 
+            // Downloading spinner overlay
             if (romWithStatus.status == DownloadStatus.DOWNLOADING) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    strokeWidth = 2.dp,
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(28.dp),
+                        strokeWidth = 3.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
         }
 
@@ -279,4 +377,176 @@ private fun RomCard(
             modifier = Modifier.padding(top = 4.dp),
         )
     }
+}
+
+// ── Bottom sheet: game detail ──────────────────────────────────────────
+@Composable
+private fun RomDetailSheet(
+    rom: Rom,
+    isDownloaded: Boolean,
+    isDownloading: Boolean,
+    onDownload: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 32.dp),
+    ) {
+        // Cover + title row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            AsyncImage(
+                model = rom.coverUrlLarge ?: rom.coverUrlSmall,
+                contentDescription = rom.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(width = 100.dp, height = 140.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = rom.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = rom.platformSlug.uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                // Regions + revision
+                val metaParts = buildList {
+                    if (rom.regions.isNotEmpty()) addAll(rom.regions)
+                    rom.revision?.takeIf { it.isNotBlank() }?.let { add("Rev $it") }
+                }
+                if (metaParts.isNotEmpty()) {
+                    Text(
+                        text = metaParts.joinToString(" • "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            IconButton(onClick = onClose) {
+                Icon(Icons.Filled.Close, contentDescription = "Cerrar")
+            }
+        }
+
+        // Summary
+        rom.summary?.takeIf { it.isNotBlank() }?.let {
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(12.dp))
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 5,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+
+        androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(16.dp))
+
+        // Metadata grid
+        DetailRow("Archivo", rom.fileName)
+        DetailRow("Tamaño", formatFileSize(rom.fileSizeBytes))
+        rom.fileNameNoTags?.let { DetailRow("Nombre limpio", it) }
+        rom.fileExtension?.let { DetailRow("Extensión", it) }
+        if (rom.languages.isNotEmpty()) DetailRow("Idiomas", rom.languages.joinToString(", "))
+        if (rom.genres.isNotEmpty()) DetailRow("Géneros", rom.genres.joinToString(", "))
+        if (rom.isMulti) DetailRow("Multi-archivo", "Sí (${rom.files.size} archivos)")
+        rom.igdbId?.let { DetailRow("IGDB ID", it.toString()) }
+
+        androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(20.dp))
+
+        // Action button
+        when {
+            isDownloaded -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Filled.DownloadDone,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        "  Descargado",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
+                }
+            }
+            isDownloading -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Text(
+                        "  Descargando...",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            else -> {
+                androidx.compose.material3.Button(
+                    onClick = onDownload,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Text("  Descargar")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+    ) {
+        Text(
+            text = "$label: ",
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+private fun formatFileSize(bytes: Long): String {
+    if (bytes <= 0) return "—"
+    val units = arrayOf("B", "KB", "MB", "GB")
+    var size = bytes.toDouble()
+    var unitIndex = 0
+    while (size >= 1024 && unitIndex < units.lastIndex) {
+        size /= 1024
+        unitIndex++
+    }
+    return if (unitIndex == 0) "${bytes}B" else String.format("%.1f %s", size, units[unitIndex])
 }
