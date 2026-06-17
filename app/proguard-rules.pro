@@ -40,3 +40,9 @@
 # Compose ya incluye sus propias reglas en el AAR; no suele necesitar
 # reglas adicionales, pero mantenemos esto como safety net.
 -dontwarn androidx.compose.**
+
+# ── Tink / Security-Crypto ──────────────────────────────────────────────
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn com.google.crypto.tink.**
+-keep class com.google.crypto.tink.** { *; }
+-keep class com.google.crypto.tink.aead.** { *; }
