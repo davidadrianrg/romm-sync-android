@@ -96,12 +96,15 @@ class RomRepository(
      * Fetch paginated ROMs for a platform from the server.
      * Uses platform_ids (plural) + offset pagination per RomM API spec.
      * Optional search term triggers server-side full-text search across ALL ROMs.
+     * Optional genre/region filters are applied server-side via the RomM API.
      */
     suspend fun fetchRoms(
         platformId: Int,
         limit: Int = 50,
         offset: Int = 0,
         search: String? = null,
+        genre: String? = null,
+        region: String? = null,
     ): ApiResult<List<Rom>> {
         return try {
             val params = buildMap {
@@ -112,6 +115,12 @@ class RomRepository(
                 put("order_dir", "asc")
                 if (!search.isNullOrBlank()) {
                     put("search", search.trim())
+                }
+                if (!genre.isNullOrBlank()) {
+                    put("genre", genre.trim())
+                }
+                if (!region.isNullOrBlank()) {
+                    put("region", region.trim())
                 }
             }
             val response = api().getRoms(params)

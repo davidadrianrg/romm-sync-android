@@ -19,6 +19,13 @@ import java.util.concurrent.TimeUnit
  * Manages the WorkManager download queue.
  *
  * Enqueues ROM downloads, observes their progress, and supports cancellation.
+ *
+ * **Concurrency limit**: the user-configured `maxConcurrentDownloads` setting
+ * (1-5) is enforced inside [DownloadWorker] via a process-wide Semaphore kept
+ * in its companion object. This file simply enqueues OneTimeWorkRequests —
+ * WorkManager will run them in parallel, but only `maxConcurrentDownloads`
+ * workers will actually transfer bytes at any given time. See
+ * [DownloadWorker.syncConcurrencyLimit] for the implementation.
  */
 class DownloadManager(private val context: Context) {
 

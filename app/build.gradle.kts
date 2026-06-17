@@ -5,6 +5,20 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// ── Signing config dinámico ──────────────────────────────────────────
+// Lee desde keystore.properties (no commiteado, en .gitignore) o desde
+// variables de entorno en CI. Si no existe, el release se firma con el
+// keystore de debug (suficiente para CI/testing, no para Play Store).
+val keystoreProperties = java.util.Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) load(f.inputStream())
+    // Fallback a variables de entorno (útil en CI)
+    System.getenv("KEYSTORE_FILE")?.let { setProperty("storeFile", it) }
+    System.getenv("KEYSTORE_PASSWORD")?.let { setProperty("storePassword", it) }
+    System.getenv("KEY_ALIAS")?.let { setProperty("keyAlias", it) }
+    System.getenv("KEY_PASSWORD")?.let { setProperty("keyPassword", it) }
+}
+
 android {
     namespace = "es.davidrg.rommsync"
     compileSdk = 35
@@ -19,6 +33,15 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            keystoreProperties["storeFile"]?.let { storeFile = file(it) }
+            keystoreProperties["storePassword"]?.let { storePassword = it as String }
+            keystoreProperties["keyAlias"]?.let { keyAlias = it as String }
+            keystoreProperties["keyPassword"]?.let { keyPassword = it as String }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -27,6 +50,21 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Usa el keystore de release si está configurado; si no, debug
+            signingConfig = if (keystoreProperties.containsKey("storeFile")) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+        }
+        debug {
+            // Minify desactivado en debug para builds rápidos de desarrollo.
+            // Activar manualmente si quieres testear R8 localmente:
+            //   isMinifyEnabled = true
+            //   proguardFiles(
+            //       getDefaultProguardFile("proguard-android.txt"),
+            //       "proguard-rules.pro"
+            //   )
         }
     }
 
@@ -97,4 +135,14 @@ dependencies {
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
+
+    // Testing
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("io.mockk:mockk:1.13.13")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("app.cash.turbine:turbine:1.2.0")
+    testImplementation("com.google.truth:truth:1.4.4")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("androidx.room:room-testing:2.6.1")
+    testImplementation("org.robolectric:robolectric:4.13")
 }

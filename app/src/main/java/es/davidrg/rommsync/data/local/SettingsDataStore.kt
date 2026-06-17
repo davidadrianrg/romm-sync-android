@@ -174,6 +174,22 @@ class SettingsDataStore(private val context: Context) {
             runBlocking { context.dataStore.data.first()[SERVER_URL] ?: "" }
         }.getOrDefault("")
     }
+
+    /**
+     * Synchronous read of the max concurrent downloads setting for use in
+     * WorkManager (the [DownloadWorker] reads this to size its concurrency
+     * semaphore before each run).
+     *
+     * The value is always coerced to the valid 1-5 range.
+     */
+    fun getMaxConcurrentDownloadsBlocking(): Int {
+        return runCatching {
+            runBlocking {
+                context.dataStore.data.first()[MAX_CONCURRENT_DOWNLOADS]
+                    ?: DEFAULT_MAX_DOWNLOADS
+            }
+        }.getOrDefault(DEFAULT_MAX_DOWNLOADS).coerceIn(1, 5)
+    }
 }
 
 data class ServerConfig(

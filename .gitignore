@@ -81,3 +81,6 @@ lint/tmp/
 # Secrets / API keys
 secrets.properties
 *.secret
+
+# Signing keystore properties (contains keystore credentials)
+keystore.properties

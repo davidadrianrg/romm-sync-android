@@ -33,6 +33,14 @@ class LibraryViewModel(
     private val _roms = MutableStateFlow<List<Rom>>(emptyList())
     val roms = _roms.asStateFlow()
 
+    /** Género seleccionado actualmente para filtrado server-side (null = sin filtro). */
+    private val _selectedGenre = MutableStateFlow<String?>(null)
+    val selectedGenre = _selectedGenre.asStateFlow()
+
+    /** Región seleccionada actualmente para filtrado server-side (null = sin filtro). */
+    private val _selectedRegion = MutableStateFlow<String?>(null)
+    val selectedRegion = _selectedRegion.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
@@ -53,6 +61,39 @@ class LibraryViewModel(
     companion object {
         private const val PAGE_SIZE = 50
     }
+
+    /**
+     * Géneros disponibles extraídos de los ROMs ya cargados.
+     * Se actualiza automáticamente cuando cambia [_roms].
+     */
+    val availableGenres: StateFlow<List<String>> = _roms
+        .map { roms -> roms.flatMap { it.genres }.distinct().sorted() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList(),
+        )
+
+    /**
+     * Regiones disponibles extraídas de los ROMs ya cargados.
+     * Se actualiza automáticamente cuando cambia [_roms].
+     */
+    val availableRegions: StateFlow<List<String>> = _roms
+        .map { roms -> roms.flatMap { it.regions }.distinct().sorted() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList(),
+        )
+
+    /** True cuando hay algún filtro avanzado activo (género o región). */
+    val hasActiveFilters: StateFlow<Boolean> = combine(_selectedGenre, _selectedRegion) { genre, region ->
+        !genre.isNullOrBlank() || !region.isNullOrBlank()
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false,
+    )
 
     /** One-shot events for UI feedback (snackbars). */
     private val _events = MutableSharedFlow<LibraryEvent>(extraBufferCapacity = 5)
@@ -103,6 +144,8 @@ class LibraryViewModel(
     fun selectPlatform(platformId: Int, serverUrl: String, apiKey: String) {
         _selectedPlatformId.value = platformId
         currentSearch = null
+        _selectedGenre.value = null
+        _selectedRegion.value = null
         loadRoms(serverUrl, apiKey, reset = true)
     }
 
@@ -113,6 +156,23 @@ class LibraryViewModel(
      */
     fun searchRoms(query: String, serverUrl: String, apiKey: String) {
         currentSearch = query.ifBlank { null }
+        loadRoms(serverUrl, apiKey, reset = true)
+    }
+
+    /**
+     * Aplica filtros avanzados (género y/o región) y recarga los ROMs desde
+     * el servidor con los nuevos parámetros. Pasa null/vacío para quitar un filtro.
+     */
+    fun applyFilters(serverUrl: String, apiKey: String, genre: String?, region: String?) {
+        _selectedGenre.value = genre?.takeIf { it.isNotBlank() }
+        _selectedRegion.value = region?.takeIf { it.isNotBlank() }
+        loadRoms(serverUrl, apiKey, reset = true)
+    }
+
+    /** Limpia todos los filtros avanzados y recarga. */
+    fun clearFilters(serverUrl: String, apiKey: String) {
+        _selectedGenre.value = null
+        _selectedRegion.value = null
         loadRoms(serverUrl, apiKey, reset = true)
     }
 
@@ -129,6 +189,43 @@ class LibraryViewModel(
         }
     }
 
+    /**
+     * Batch download: enqueues every ROM in [roms] that is not already downloading.
+     * Used by the "Descargar faltantes" action in the library toolbar.
+     *
+     * @param roms        ROMs the user wants to download (usually the visible
+     *                    NOT_DOWNLOADED ones from the current platform page).
+     * @param serverUrl   Base URL of the RomM server.
+     */
+    fun enqueueBatchDownload(roms: List<Rom>, serverUrl: String) {
+        val manager = downloadManager ?: run {
+            viewModelScope.launch { _events.emit(LibraryEvent.Error("DownloadManager no disponible")) }
+            return
+        }
+        // Skip ROMs that are already enqueued/running to avoid duplicate work.
+        val currentlyDownloading = activeDownloads.value
+        val toEnqueue = roms.filter { it.id !in currentlyDownloading }
+        if (toEnqueue.isEmpty()) {
+            viewModelScope.launch { _events.emit(LibraryEvent.Error("No hay ROMs nuevos para descargar")) }
+            return
+        }
+        viewModelScope.launch {
+            toEnqueue.forEach { rom -> manager.enqueueDownload(rom = rom, serverUrl = serverUrl) }
+            _events.emit(LibraryEvent.BatchDownloadStarted(toEnqueue.size))
+        }
+    }
+
+    /**
+     * Pull-to-refresh: reloads the first page for the currently selected
+     * platform keeping the active search term (if any). Does not change the
+     * selected platform.
+     */
+    fun refresh(serverUrl: String, apiKey: String) {
+        // Only reload if a platform is selected; otherwise there's nothing to refresh.
+        if (_selectedPlatformId.value == null) return
+        loadRoms(serverUrl, apiKey, reset = true)
+    }
+
     private fun loadRoms(serverUrl: String, apiKey: String, reset: Boolean) {
         val platformId = _selectedPlatformId.value ?: return
         viewModelScope.launch {
@@ -141,7 +238,13 @@ class LibraryViewModel(
             _error.value = null
             romRepository.configureApi(serverUrl, apiKey)
             val offset = if (reset) 0 else _roms.value.size
-            when (val result = romRepository.fetchRoms(platformId, offset = offset, search = currentSearch)) {
+            when (val result = romRepository.fetchRoms(
+                platformId,
+                offset = offset,
+                search = currentSearch,
+                genre = _selectedGenre.value,
+                region = _selectedRegion.value,
+            )) {
                 is ApiResult.Success -> {
                     _roms.value = if (reset) result.data else _roms.value + result.data
                     _hasMore.value = result.data.size >= PAGE_SIZE
@@ -173,5 +276,6 @@ private fun ErrorKind.toUserMessage(): String = when (this) {
 /** One-shot UI events emitted by the ViewModel. */
 sealed class LibraryEvent {
     data class DownloadStarted(val romName: String) : LibraryEvent()
+    data class BatchDownloadStarted(val count: Int) : LibraryEvent()
     data class Error(val message: String) : LibraryEvent()
 }
