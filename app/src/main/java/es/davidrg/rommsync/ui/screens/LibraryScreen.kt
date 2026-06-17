@@ -1,6 +1,5 @@
 package es.davidrg.rommsync.ui.screens
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -19,12 +18,8 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -32,7 +27,6 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -43,12 +37,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -68,6 +60,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,6 +70,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -93,7 +88,7 @@ private enum class RomFilter(val label: String) {
     ALL("Todos"), MISSING("Faltantes"), DOWNLOADED("Descargados")
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen() {
     val context = LocalContext.current
@@ -118,16 +113,17 @@ fun LibraryScreen() {
     var selectedFilter by remember { mutableStateOf(RomFilter.ALL) }
     var platformMenuExpanded by remember { mutableStateOf(false) }
 
-    // ── Advanced filters (genre/region) ────────────────────────────────
-    val availableGenres by viewModel.availableGenres.collectAsState()
-    val availableRegions by viewModel.availableRegions.collectAsState()
-    val currentGenre by viewModel.selectedGenre.collectAsState()
-    val currentRegion by viewModel.selectedRegion.collectAsState()
-    val hasActiveFilters by viewModel.hasActiveFilters.collectAsState()
-    var showFiltersSheet by remember { mutableStateOf(false) }
-    // Draft state for the bottom sheet (applied on "Aplicar")
-    var draftGenre by remember { mutableStateOf<String?>(null) }
-    var draftRegion by remember { mutableStateOf<String?>(null) }
+    // ── Server-side search with debounce ──────────────────────────────
+    LaunchedEffect(selectedPlatformId) {
+        snapshotFlow { searchQuery }
+            .debounce(400)
+            .distinctUntilChanged()
+            .collect { query ->
+                if (selectedPlatformId != null) {
+                    viewModel.searchRoms(query, settings.serverUrl, settings.apiKey)
+                }
+            }
+    }
 
     // Bottom sheet state for long-press game details
     var selectedRom by remember { mutableStateOf<Rom?>(null) }
@@ -162,36 +158,14 @@ fun LibraryScreen() {
         }
     }
 
-    // Filter ROMs locally: search + status + genre + region (all client-side)
-    val filteredRoms by remember(romsWithStatus, selectedFilter, searchQuery, currentGenre, currentRegion) {
+    // Filter ROMs by download status only (search is server-side)
+    val filteredRoms by remember(romsWithStatus, selectedFilter) {
         derivedStateOf {
-            var result: List<RomWithStatus> = romsWithStatus
-
-            // Search filter (client-side, instant)
-            if (searchQuery.isNotBlank()) {
-                result = result.filter {
-                    it.rom.name.contains(searchQuery, ignoreCase = true)
-                }
+            when (selectedFilter) {
+                RomFilter.ALL -> romsWithStatus
+                RomFilter.MISSING -> romsWithStatus.filter { it.status == DownloadStatus.NOT_DOWNLOADED }
+                RomFilter.DOWNLOADED -> romsWithStatus.filter { it.status == DownloadStatus.DOWNLOADED }
             }
-
-            // Genre filter
-            if (!currentGenre.isNullOrBlank()) {
-                result = result.filter { currentGenre in it.rom.genres }
-            }
-
-            // Region filter
-            if (!currentRegion.isNullOrBlank()) {
-                result = result.filter { currentRegion in it.rom.regions }
-            }
-
-            // Status filter
-            result = when (selectedFilter) {
-                RomFilter.ALL -> result
-                RomFilter.MISSING -> result.filter { it.status == DownloadStatus.NOT_DOWNLOADED }
-                RomFilter.DOWNLOADED -> result.filter { it.status == DownloadStatus.DOWNLOADED }
-            }
-
-            result
         }
     }
 
@@ -232,27 +206,6 @@ fun LibraryScreen() {
                 TopAppBar(
                     title = { Text("Biblioteca") },
                     actions = {
-                        // Advanced filters button with badge when active
-                        androidx.compose.material3.BadgedBox(
-                            badge = {
-                                if (hasActiveFilters) {
-                                    androidx.compose.material3.Badge(
-                                        containerColor = MaterialTheme.colorScheme.tertiary,
-                                    )
-                                }
-                            },
-                        ) {
-                            IconButton(onClick = {
-                                draftGenre = currentGenre
-                                draftRegion = currentRegion
-                                showFiltersSheet = true
-                            }) {
-                                Icon(
-                                    Icons.Filled.FilterList,
-                                    contentDescription = "Filtros avanzados",
-                                )
-                            }
-                        }
                         val showBatchButton = selectedPlatformId != null && missingRoms.isNotEmpty()
                         if (showBatchButton) {
                             IconButton(onClick = { showBatchDialog = true }) {
@@ -361,23 +314,6 @@ fun LibraryScreen() {
                             label = { Text(filter.label) },
                         )
                     }
-                    // Advanced filters button (landscape)
-                    FilterChip(
-                        selected = hasActiveFilters,
-                        onClick = {
-                            draftGenre = currentGenre
-                            draftRegion = currentRegion
-                            showFiltersSheet = true
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Filled.FilterList,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        },
-                        label = { Text("Filtros") },
-                    )
                 }
             } else {
                 ExposedDropdownMenuBox(
@@ -555,38 +491,6 @@ fun LibraryScreen() {
                     selectedRom = null
                 },
                 onClose = { selectedRom = null },
-            )
-        }
-    }
-
-    // ── Bottom sheet: advanced filters (genre/region) ──────────────────
-    if (showFiltersSheet) {
-        val filtersSheetState = rememberModalBottomSheetState()
-        ModalBottomSheet(
-            onDismissRequest = { showFiltersSheet = false },
-            sheetState = filtersSheetState,
-            containerColor = MaterialTheme.colorScheme.surface,
-        ) {
-            AdvancedFiltersSheet(
-                genres = availableGenres,
-                regions = availableRegions,
-                selectedGenre = draftGenre,
-                selectedRegion = draftRegion,
-                onGenreChange = { genre ->
-                    draftGenre = if (draftGenre == genre) null else genre
-                },
-                onRegionChange = { region ->
-                    draftRegion = if (draftRegion == region) null else region
-                },
-                onClear = {
-                    draftGenre = null
-                    draftRegion = null
-                },
-                onApply = {
-                    viewModel.setGenreFilter(draftGenre)
-                    viewModel.setRegionFilter(draftRegion)
-                    showFiltersSheet = false
-                },
             )
         }
     }
@@ -914,128 +818,4 @@ private fun formatFileSize(bytes: Long): String {
         unitIndex++
     }
     return if (unitIndex == 0) "${bytes}B" else String.format("%.1f %s", size, units[unitIndex])
-}
-
-// ── Advanced filters bottom sheet ──────────────────────────────────────
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun AdvancedFiltersSheet(
-    genres: List<String>,
-    regions: List<String>,
-    selectedGenre: String?,
-    selectedRegion: String?,
-    onGenreChange: (String) -> Unit,
-    onRegionChange: (String) -> Unit,
-    onClear: () -> Unit,
-    onApply: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .padding(bottom = 32.dp)
-            .verticalScroll(rememberScrollState()),
-    ) {
-        // Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Filtros avanzados",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Icon(
-                Icons.Filled.FilterList,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-
-        Spacer(modifier = Modifier.size(16.dp))
-
-        // ── Genre chips ─────────────────────────────────────────────────
-        Text(
-            text = "Género",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(modifier = Modifier.size(6.dp))
-        if (genres.isEmpty()) {
-            Text(
-                text = "Carga una plataforma para ver géneros disponibles",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                genres.forEach { genre ->
-                    FilterChip(
-                        selected = selectedGenre == genre,
-                        onClick = { onGenreChange(genre) },
-                        label = { Text(genre) },
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.size(16.dp))
-        HorizontalDivider()
-        Spacer(modifier = Modifier.size(16.dp))
-
-        // ── Region chips ────────────────────────────────────────────────
-        Text(
-            text = "Región",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(modifier = Modifier.size(6.dp))
-        if (regions.isEmpty()) {
-            Text(
-                text = "Carga una plataforma para ver regiones disponibles",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                regions.forEach { region ->
-                    FilterChip(
-                        selected = selectedRegion == region,
-                        onClick = { onRegionChange(region) },
-                        label = { Text(region) },
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.size(24.dp))
-
-        // ── Action buttons ──────────────────────────────────────────────
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            OutlinedButton(
-                onClick = onClear,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text("Limpiar filtros")
-            }
-            Button(
-                onClick = onApply,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text("Aplicar")
-            }
-        }
-    }
 }

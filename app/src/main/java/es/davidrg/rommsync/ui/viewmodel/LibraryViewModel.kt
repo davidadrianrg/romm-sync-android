@@ -2,7 +2,6 @@ package es.davidrg.rommsync.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import es.davidrg.rommsync.data.local.ServerConfig
 import es.davidrg.rommsync.data.repository.RomRepository
 import es.davidrg.rommsync.domain.model.ApiResult
 import es.davidrg.rommsync.domain.model.DownloadStatus
@@ -33,14 +32,6 @@ class LibraryViewModel(
     private val _roms = MutableStateFlow<List<Rom>>(emptyList())
     val roms = _roms.asStateFlow()
 
-    /** Género seleccionado actualmente para filtrado server-side (null = sin filtro). */
-    private val _selectedGenre = MutableStateFlow<String?>(null)
-    val selectedGenre = _selectedGenre.asStateFlow()
-
-    /** Región seleccionada actualmente para filtrado server-side (null = sin filtro). */
-    private val _selectedRegion = MutableStateFlow<String?>(null)
-    val selectedRegion = _selectedRegion.asStateFlow()
-
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
@@ -48,49 +39,19 @@ class LibraryViewModel(
     private val _isLoadingMore = MutableStateFlow(false)
     val isLoadingMore = _isLoadingMore.asStateFlow()
 
-    /** False when we've fetched all pages for this platform. */
+    /** False when we've fetched all pages for this platform/search. */
     private val _hasMore = MutableStateFlow(true)
     val hasMore = _hasMore.asStateFlow()
 
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
 
+    /** Current server-side search term (null = no search, browse all). */
+    private var currentSearch: String? = null
+
     companion object {
         private const val PAGE_SIZE = 50
     }
-
-    /**
-     * Géneros disponibles extraídos de los ROMs ya cargados.
-     * Se actualiza automáticamente cuando cambia [_roms].
-     */
-    val availableGenres: StateFlow<List<String>> = _roms
-        .map { roms -> roms.flatMap { it.genres }.distinct().sorted() }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList(),
-        )
-
-    /**
-     * Regiones disponibles extraídas de los ROMs ya cargados.
-     * Se actualiza automáticamente cuando cambia [_roms].
-     */
-    val availableRegions: StateFlow<List<String>> = _roms
-        .map { roms -> roms.flatMap { it.regions }.distinct().sorted() }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList(),
-        )
-
-    /** True cuando hay algún filtro avanzado activo (género o región). */
-    val hasActiveFilters: StateFlow<Boolean> = combine(_selectedGenre, _selectedRegion) { genre, region ->
-        !genre.isNullOrBlank() || !region.isNullOrBlank()
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = false,
-    )
 
     /** One-shot events for UI feedback (snackbars). */
     private val _events = MutableSharedFlow<LibraryEvent>(extraBufferCapacity = 5)
@@ -140,24 +101,18 @@ class LibraryViewModel(
 
     fun selectPlatform(platformId: Int, serverUrl: String, apiKey: String) {
         _selectedPlatformId.value = platformId
-        _selectedGenre.value = null
-        _selectedRegion.value = null
+        currentSearch = null
         loadRoms(serverUrl, apiKey, reset = true)
     }
 
-    /** Called by infinite scroll when user nears the bottom. */
-    fun setGenreFilter(genre: String?) {
-        _selectedGenre.value = genre?.takeIf { it.isNotBlank() }
-    }
-
-    fun setRegionFilter(region: String?) {
-        _selectedRegion.value = region?.takeIf { it.isNotBlank() }
-    }
-
-    /** Limpia todos los filtros avanzados. */
-    fun clearAllFilters() {
-        _selectedGenre.value = null
-        _selectedRegion.value = null
+    /**
+     * Server-side search: fetches ROMs matching [query] from the ENTIRE
+     * platform via the RomM API `search` parameter. Replaces the current list.
+     * Pass empty string to clear search and reload full list.
+     */
+    fun searchRoms(query: String, serverUrl: String, apiKey: String) {
+        currentSearch = query.ifBlank { null }
+        loadRoms(serverUrl, apiKey, reset = true)
     }
 
     /** Called by infinite scroll when user nears the bottom. */
@@ -176,10 +131,6 @@ class LibraryViewModel(
     /**
      * Batch download: enqueues every ROM in [roms] that is not already downloading.
      * Used by the "Descargar faltantes" action in the library toolbar.
-     *
-     * @param roms        ROMs the user wants to download (usually the visible
-     *                    NOT_DOWNLOADED ones from the current platform page).
-     * @param serverUrl   Base URL of the RomM server.
      */
     fun enqueueBatchDownload(roms: List<Rom>, serverUrl: String) {
         val manager = downloadManager ?: run {
@@ -201,11 +152,9 @@ class LibraryViewModel(
 
     /**
      * Pull-to-refresh: reloads the first page for the currently selected
-     * platform keeping the active search term (if any). Does not change the
-     * selected platform.
+     * platform keeping the active search term (if any).
      */
     fun refresh(serverUrl: String, apiKey: String) {
-        // Only reload if a platform is selected; otherwise there's nothing to refresh.
         if (_selectedPlatformId.value == null) return
         loadRoms(serverUrl, apiKey, reset = true)
     }
@@ -225,6 +174,7 @@ class LibraryViewModel(
             when (val result = romRepository.fetchRoms(
                 platformId,
                 offset = offset,
+                search = currentSearch,
             )) {
                 is ApiResult.Success -> {
                     _roms.value = if (reset) result.data else _roms.value + result.data
@@ -240,7 +190,6 @@ class LibraryViewModel(
             _isLoadingMore.value = false
         }
     }
-
 }
 
 /**
