@@ -7,17 +7,9 @@ plugins {
 
 // ── Signing config dinámico ──────────────────────────────────────────
 // Lee desde keystore.properties (no commiteado, en .gitignore) o desde
-// variables de entorno en CI. Si no existe, el release se firma con el
-// keystore de debug (suficiente para CI/testing, no para Play Store).
-val keystoreProperties = java.util.Properties().apply {
-    val f = rootProject.file("keystore.properties")
-    if (f.exists()) load(f.inputStream())
-    // Fallback a variables de entorno (útil en CI)
-    System.getenv("KEYSTORE_FILE")?.let { setProperty("storeFile", it) }
-    System.getenv("KEYSTORE_PASSWORD")?.let { setProperty("storePassword", it) }
-    System.getenv("KEY_ALIAS")?.let { setProperty("keyAlias", it) }
-    System.getenv("KEY_PASSWORD")?.let { setProperty("keyPassword", it) }
-}
+// variables de entorno en CI. Si no existe, se firma con debug keystore.
+val ksFile = rootProject.file("keystore.properties")
+val hasKeystore = ksFile.exists()
 
 android {
     namespace = "es.davidrg.rommsync"
@@ -35,10 +27,14 @@ android {
 
     signingConfigs {
         create("release") {
-            keystoreProperties["storeFile"]?.let { storeFile = file(it) }
-            keystoreProperties["storePassword"]?.let { storePassword = it as String }
-            keystoreProperties["keyAlias"]?.let { keyAlias = it as String }
-            keystoreProperties["keyPassword"]?.let { keyPassword = it as String }
+            if (hasKeystore) {
+                val props = java.util.Properties()
+                ksFile.inputStream().use { props.load(it) }
+                storeFile = file(props.getProperty("storeFile", ""))
+                storePassword = props.getProperty("storePassword", "")
+                keyAlias = props.getProperty("keyAlias", "")
+                keyPassword = props.getProperty("keyPassword", "")
+            }
         }
     }
 
@@ -50,21 +46,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Usa el keystore de release si está configurado; si no, debug
-            signingConfig = if (keystoreProperties.containsKey("storeFile")) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
-        }
-        debug {
-            // Minify desactivado en debug para builds rápidos de desarrollo.
-            // Activar manualmente si quieres testear R8 localmente:
-            //   isMinifyEnabled = true
-            //   proguardFiles(
-            //       getDefaultProguardFile("proguard-android.txt"),
-            //       "proguard-rules.pro"
-            //   )
+            signingConfig = if (hasKeystore) signingConfigs.getByName("release")
+                else signingConfigs.getByName("debug")
         }
     }
 
