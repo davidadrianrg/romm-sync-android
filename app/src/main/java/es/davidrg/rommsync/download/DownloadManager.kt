@@ -8,7 +8,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
-import androidx.lifecycle.asFlow
 import es.davidrg.rommsync.domain.model.DownloadTask
 import es.davidrg.rommsync.domain.model.Rom
 import kotlinx.coroutines.flow.Flow
@@ -18,16 +17,11 @@ import kotlinx.coroutines.flow.map
  * Manages the WorkManager download queue.
  *
  * Enqueues ROM downloads, observes their progress, and supports cancellation.
- * Download concurrency is controlled via WorkManager's unique work chains.
  */
 class DownloadManager(private val context: Context) {
 
     private val workManager = WorkManager.getInstance(context)
 
-    /**
-     * Enqueues a ROM download. For multi-file ROMs, only the primary file is enqueued;
-     * the server will dynamically zip all files via mod_zip.
-     */
     fun enqueueDownload(
         rom: Rom,
         serverUrl: String,
@@ -60,9 +54,10 @@ class DownloadManager(private val context: Context) {
 
     /**
      * Observes all active and completed downloads as a Flow of DownloadTask list.
+     * Uses WorkManager 2.9+ native Flow API.
      */
     fun observeDownloads(): Flow<List<DownloadTask>> {
-        return workManager.getWorkInfosByTag(TAG_DOWNLOAD).asFlow().map { workInfos ->
+        return workManager.getWorkInfosByTagFlow(TAG_DOWNLOAD).map { workInfos ->
             workInfos
                 .filter { it.state != WorkInfo.State.CANCELLED }
                 .map { it.toDownloadTask() }
@@ -70,37 +65,43 @@ class DownloadManager(private val context: Context) {
         }
     }
 
-    /**
-     * Cancel a specific ROM download.
-     */
     fun cancelDownload(romId: Int) {
         workManager.cancelAllWorkByTag(workTagForRom(romId))
     }
 
-    /**
-     * Cancel all downloads in the queue.
-     */
     fun cancelAllDownloads() {
         workManager.cancelAllWorkByTag(TAG_DOWNLOAD)
     }
 
     private fun workTagForRom(romId: Int) = "rom_$romId"
 
+    /**
+     * Converts a WorkInfo to a DownloadTask.
+     * Reads metadata from progress Data (which includes rom info + progress updates).
+     */
     private fun WorkInfo.toDownloadTask(): DownloadTask {
-        val progress = progress.getInt(DownloadWorker.KEY_PROGRESS, 0)
-        val indeterminate = progress.getBoolean(DownloadWorker.KEY_INDETERMINATE, false)
-        val romName = inputData.getString(DownloadWorker.KEY_ROM_NAME) ?: "Unknown"
-        val fileName = inputData.getString(DownloadWorker.KEY_FILE_NAME) ?: ""
-        val platformSlug = inputData.getString(DownloadWorker.KEY_PLATFORM_SLUG) ?: ""
+        val progressData = progress
+        val outputData = outputData
+
+        val romId = progressData.getInt(DownloadWorker.KEY_ROM_ID, -1)
+        val romName = progressData.getString(DownloadWorker.KEY_ROM_NAME)
+            ?: outputData.getString(DownloadWorker.KEY_ROM_NAME)
+            ?: "Unknown"
+        val fileName = progressData.getString(DownloadWorker.KEY_FILE_NAME)
+            ?: outputData.getString(DownloadWorker.KEY_FILE_NAME)
+            ?: ""
+        val platformSlug = progressData.getString(DownloadWorker.KEY_PLATFORM_SLUG)
+            ?: outputData.getString(DownloadWorker.KEY_PLATFORM_SLUG)
+            ?: ""
 
         return DownloadTask(
-            romId = inputData.getInt(DownloadWorker.KEY_ROM_ID, -1),
+            romId = romId,
             romName = romName,
             fileName = fileName,
             platformSlug = platformSlug,
             workId = id.toString(),
-            progress = progress,
-            isIndeterminate = indeterminate,
+            progress = progressData.getInt(DownloadWorker.KEY_PROGRESS, 0),
+            isIndeterminate = progressData.getBoolean(DownloadWorker.KEY_INDETERMINATE, false),
             isRunning = state == WorkInfo.State.RUNNING,
             isCompleted = state == WorkInfo.State.SUCCEEDED,
             isFailed = state == WorkInfo.State.FAILED,

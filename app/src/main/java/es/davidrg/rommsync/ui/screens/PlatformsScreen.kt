@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -30,6 +31,7 @@ import es.davidrg.rommsync.RomMSyncApplication
 import es.davidrg.rommsync.domain.model.Platform
 import es.davidrg.rommsync.ui.viewmodel.PlatformsViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlatformsScreen() {
     val context = LocalContext.current
@@ -69,7 +71,7 @@ fun PlatformsScreen() {
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(vertical = 16.dp),
                 )
-                return@Scaffold
+                return@Column
             }
 
             Row(

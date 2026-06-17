@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +48,7 @@ import es.davidrg.rommsync.ui.viewmodel.ConfigViewModel
 import es.davidrg.rommsync.util.hasAllFilesAccess
 import es.davidrg.rommsync.util.rememberNotificationPermissionState
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConfigScreen() {
     val context = LocalContext.current
@@ -64,10 +67,10 @@ fun ConfigScreen() {
     var apiKey by remember { mutableStateOf("") }
     var apiKeyVisible by remember { mutableStateOf(false) }
 
-    // Sync local state when settings load
-    LaunchedEffectOnce(settings) {
-        if (serverUrl.isEmpty()) serverUrl = settings.serverUrl
-        if (apiKey.isEmpty()) apiKey = settings.apiKey
+    // Sync local state when settings change
+    LaunchedEffect(settings.serverUrl, settings.apiKey) {
+        if (serverUrl.isEmpty() && settings.serverUrl.isNotEmpty()) serverUrl = settings.serverUrl
+        if (apiKey.isEmpty() && settings.apiKey.isNotEmpty()) apiKey = settings.apiKey
     }
 
     Scaffold(
@@ -188,18 +191,6 @@ fun ConfigScreen() {
                     color = MaterialTheme.colorScheme.secondary,
                 )
             }
-        }
-    }
-}
-
-/**
- * Triggers [block] once when [key] changes. Avoids repeated calls on recomposition.
- */
-@Composable
-private fun <T> LaunchedEffectOnce(key: T, block: () -> Unit) {
-    androidx.compose.runtime.LaunchedEffect(key) {
-        if (key is es.davidrg.rommsync.data.local.ServerConfig && key.isConfigured) {
-            block()
         }
     }
 }

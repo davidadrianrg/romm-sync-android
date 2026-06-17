@@ -1,7 +1,6 @@
 package es.davidrg.rommsync.download
 
 import android.content.Context
-import android.net.Uri
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.WorkerParameters
@@ -52,10 +51,7 @@ class DownloadWorker(
         // Build API client for this download
         val apiService = NetworkModule.createApiService(serverUrl, apiKey)
 
-        setProgress(workDataOf(
-            KEY_PROGRESS to 0,
-            KEY_INDETERMINATE to false,
-        ))
+        reportProgress(0, false, romId, romName, fileName, platformSlug)
 
         return@withContext try {
             val response = apiService.downloadRom(romId, fileName)
@@ -63,24 +59,48 @@ class DownloadWorker(
 
             if (contentLength <= 0L) {
                 // mod_zip: Content-Length = -1 → extract on the fly
-                setProgress(workDataOf(
-                    KEY_PROGRESS to 0,
-                    KEY_INDETERMINATE to true,
-                ))
+                reportProgress(0, true, romId, romName, fileName, platformSlug)
                 extractZipStream(response, romsRootPath, platformSlug)
             } else {
                 // Normal: stream to disk with progress
-                streamToDisk(response, romsRootPath, platformSlug, fileName, contentLength)
+                streamToDisk(
+                    response, romsRootPath, platformSlug, fileName, contentLength,
+                    romId, romName,
+                )
             }
 
             Result.success(workDataOf(
                 KEY_ROM_ID to romId,
+                KEY_ROM_NAME to romName,
                 KEY_FILE_NAME to fileName,
+                KEY_PLATFORM_SLUG to platformSlug,
                 KEY_LOCAL_PATH to PathMapper.getRomFile(romsRootPath, platformSlug, fileName).absolutePath,
             ))
         } catch (e: Exception) {
             Result.retry()
         }
+    }
+
+    /**
+     * Builds progress Data with ALL metadata fields so that DownloadManager can
+     * read rom info from WorkInfo.progress without relying on inputData.
+     */
+    private suspend fun reportProgress(
+        progress: Int,
+        indeterminate: Boolean,
+        romId: Int,
+        romName: String,
+        fileName: String,
+        platformSlug: String,
+    ) {
+        setProgress(workDataOf(
+            KEY_PROGRESS to progress,
+            KEY_INDETERMINATE to indeterminate,
+            KEY_ROM_ID to romId,
+            KEY_ROM_NAME to romName,
+            KEY_FILE_NAME to fileName,
+            KEY_PLATFORM_SLUG to platformSlug,
+        ))
     }
 
     /**
@@ -92,6 +112,8 @@ class DownloadWorker(
         platformSlug: String,
         fileName: String,
         totalBytes: Long,
+        romId: Int,
+        romName: String,
     ) {
         val targetFile = PathMapper.getRomFile(romsRootPath, platformSlug, fileName)
 
@@ -112,10 +134,7 @@ class DownloadWorker(
                     val progress = ((bytesDownloaded * 100) / totalBytes).toInt()
                     if (progress - lastReportedProgress >= 2 || progress >= 100) {
                         lastReportedProgress = progress
-                        setProgress(workDataOf(
-                            KEY_PROGRESS to progress,
-                            KEY_INDETERMINATE to false,
-                        ))
+                        reportProgress(progress, false, romId, romName, fileName, platformSlug)
                     }
                 }
                 output.flush()

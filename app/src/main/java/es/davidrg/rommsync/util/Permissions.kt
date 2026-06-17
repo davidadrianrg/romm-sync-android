@@ -1,4 +1,4 @@
-package es.davidrg.rommsync
+package es.davidrg.rommsync.util
 
 import android.Manifest
 import android.content.Intent

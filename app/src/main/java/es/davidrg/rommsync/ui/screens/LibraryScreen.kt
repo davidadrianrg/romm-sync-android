@@ -18,9 +18,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
@@ -28,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -58,6 +61,7 @@ private enum class RomFilter(val label: String) {
     ALL("Todos"), MISSING("Faltantes"), DOWNLOADED("Descargados")
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen() {
     val context = LocalContext.current
@@ -181,7 +185,7 @@ fun LibraryScreen() {
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp),
+                contentPadding = PaddingValues(vertical = 8.dp),
             ) {
                 items(filteredRoms, key = { it.rom.id }) { romStatus ->
                     RomCard(
@@ -189,7 +193,7 @@ fun LibraryScreen() {
                         onDownload = {
                             if (settings.isConfigured) {
                                 container.downloadManager.enqueueDownload(
-                                    rom = it.rom,
+                                    rom = romStatus.rom,
                                     serverUrl = settings.serverUrl,
                                     apiKey = settings.apiKey,
                                 )
