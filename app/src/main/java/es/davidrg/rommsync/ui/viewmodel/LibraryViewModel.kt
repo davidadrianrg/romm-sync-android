@@ -55,9 +55,6 @@ class LibraryViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
 
-    /** Current server-side search term (null = no search, empty page browsing). */
-    private var currentSearch: String? = null
-
     companion object {
         private const val PAGE_SIZE = 50
     }
@@ -143,37 +140,24 @@ class LibraryViewModel(
 
     fun selectPlatform(platformId: Int, serverUrl: String, apiKey: String) {
         _selectedPlatformId.value = platformId
-        currentSearch = null
         _selectedGenre.value = null
         _selectedRegion.value = null
         loadRoms(serverUrl, apiKey, reset = true)
     }
 
-    /**
-     * Server-side search: fetches ROMs matching [query] from the ENTIRE platform,
-     * not just the already-loaded pages. Replaces the current list.
-     * Pass empty string to clear search and reload full list.
-     */
-    fun searchRoms(query: String, serverUrl: String, apiKey: String) {
-        currentSearch = query.ifBlank { null }
-        loadRoms(serverUrl, apiKey, reset = true)
-    }
-
-    /**
-     * Aplica filtros avanzados (género y/o región) y recarga los ROMs desde
-     * el servidor con los nuevos parámetros. Pasa null/vacío para quitar un filtro.
-     */
-    fun applyFilters(serverUrl: String, apiKey: String, genre: String?, region: String?) {
+    /** Called by infinite scroll when user nears the bottom. */
+    fun setGenreFilter(genre: String?) {
         _selectedGenre.value = genre?.takeIf { it.isNotBlank() }
-        _selectedRegion.value = region?.takeIf { it.isNotBlank() }
-        loadRoms(serverUrl, apiKey, reset = true)
     }
 
-    /** Limpia todos los filtros avanzados y recarga. */
-    fun clearFilters(serverUrl: String, apiKey: String) {
+    fun setRegionFilter(region: String?) {
+        _selectedRegion.value = region?.takeIf { it.isNotBlank() }
+    }
+
+    /** Limpia todos los filtros avanzados. */
+    fun clearAllFilters() {
         _selectedGenre.value = null
         _selectedRegion.value = null
-        loadRoms(serverUrl, apiKey, reset = true)
     }
 
     /** Called by infinite scroll when user nears the bottom. */
@@ -241,9 +225,6 @@ class LibraryViewModel(
             when (val result = romRepository.fetchRoms(
                 platformId,
                 offset = offset,
-                search = currentSearch,
-                genre = _selectedGenre.value,
-                region = _selectedRegion.value,
             )) {
                 is ApiResult.Success -> {
                     _roms.value = if (reset) result.data else _roms.value + result.data

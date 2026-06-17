@@ -1,6 +1,7 @@
 package es.davidrg.rommsync.ui.navigation
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.SportsEsports
@@ -15,7 +16,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -43,17 +46,21 @@ fun RomMSyncApp() {
     val currentDestination = navBackStackEntry?.destination
 
     val needsOnboarding = !settings.isConfigured || !hasAllFilesAccess()
+    val isLandscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
 
     Scaffold(
         bottomBar = {
             if (!needsOnboarding) {
-                NavigationBar {
+                NavigationBar(
+                    modifier = if (isLandscape) Modifier.height(48.dp) else Modifier,
+                ) {
                     bottomNavItems.forEach { screen ->
                         val isSelected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
                         NavigationBarItem(
                             icon = { Icon(screen.icon, contentDescription = screen.title) },
-                            label = { Text(screen.title) },
+                            label = { if (!isLandscape) Text(screen.title) },
                             selected = isSelected,
+                            alwaysShowLabel = !isLandscape,
                             onClick = {
                                 navController.navigate(screen.route) {
                                     popUpTo(navController.graph.findStartDestination().id) {

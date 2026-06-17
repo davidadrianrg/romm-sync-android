@@ -68,7 +68,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,8 +77,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -132,18 +129,6 @@ fun LibraryScreen() {
     var draftGenre by remember { mutableStateOf<String?>(null) }
     var draftRegion by remember { mutableStateOf<String?>(null) }
 
-    // ── Server-side search with debounce ──────────────────────────────
-    LaunchedEffect(selectedPlatformId) {
-        snapshotFlow { searchQuery }
-            .debounce(400)
-            .distinctUntilChanged()
-            .collect { query ->
-                if (selectedPlatformId != null) {
-                    viewModel.searchRoms(query, settings.serverUrl, settings.apiKey)
-                }
-            }
-    }
-
     // Bottom sheet state for long-press game details
     var selectedRom by remember { mutableStateOf<Rom?>(null) }
     val sheetState = rememberModalBottomSheetState()
@@ -177,14 +162,36 @@ fun LibraryScreen() {
         }
     }
 
-    // Filter ROMs by status only (search is server-side now)
-    val filteredRoms by remember(romsWithStatus, selectedFilter) {
+    // Filter ROMs locally: search + status + genre + region (all client-side)
+    val filteredRoms by remember(romsWithStatus, selectedFilter, searchQuery, currentGenre, currentRegion) {
         derivedStateOf {
-            when (selectedFilter) {
-                RomFilter.ALL -> romsWithStatus
-                RomFilter.MISSING -> romsWithStatus.filter { it.status == DownloadStatus.NOT_DOWNLOADED }
-                RomFilter.DOWNLOADED -> romsWithStatus.filter { it.status == DownloadStatus.DOWNLOADED }
+            var result: List<RomWithStatus> = romsWithStatus
+
+            // Search filter (client-side, instant)
+            if (searchQuery.isNotBlank()) {
+                result = result.filter {
+                    it.rom.name.contains(searchQuery, ignoreCase = true)
+                }
             }
+
+            // Genre filter
+            if (!currentGenre.isNullOrBlank()) {
+                result = result.filter { currentGenre in it.rom.genres }
+            }
+
+            // Region filter
+            if (!currentRegion.isNullOrBlank()) {
+                result = result.filter { currentRegion in it.rom.regions }
+            }
+
+            // Status filter
+            result = when (selectedFilter) {
+                RomFilter.ALL -> result
+                RomFilter.MISSING -> result.filter { it.status == DownloadStatus.NOT_DOWNLOADED }
+                RomFilter.DOWNLOADED -> result.filter { it.status == DownloadStatus.DOWNLOADED }
+            }
+
+            result
         }
     }
 
@@ -429,23 +436,6 @@ fun LibraryScreen() {
                             label = { Text(filter.label) },
                         )
                     }
-                    // Advanced filters button (portrait) — also reachable from TopAppBar
-                    FilterChip(
-                        selected = hasActiveFilters,
-                        onClick = {
-                            draftGenre = currentGenre
-                            draftRegion = currentRegion
-                            showFiltersSheet = true
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Filled.FilterList,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        },
-                        label = { Text("Filtros") },
-                    )
                 }
             }
 
@@ -593,12 +583,8 @@ fun LibraryScreen() {
                     draftRegion = null
                 },
                 onApply = {
-                    viewModel.applyFilters(
-                        serverUrl = settings.serverUrl,
-                        apiKey = settings.apiKey,
-                        genre = draftGenre,
-                        region = draftRegion,
-                    )
+                    viewModel.setGenreFilter(draftGenre)
+                    viewModel.setRegionFilter(draftRegion)
                     showFiltersSheet = false
                 },
             )

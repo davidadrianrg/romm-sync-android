@@ -12,7 +12,9 @@ import androidx.work.Data
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import es.davidrg.rommsync.data.local.RomSyncDatabase
 import es.davidrg.rommsync.data.local.SettingsDataStore
+import es.davidrg.rommsync.data.local.entity.DownloadedRomEntity
 import es.davidrg.rommsync.data.remote.NetworkModule
 import es.davidrg.rommsync.data.remote.RomMApiService
 import kotlinx.coroutines.Dispatchers
@@ -189,6 +191,21 @@ class DownloadWorker(
                 streamToDisk(response, targetFile, contentLength, 0L,
                     romId, romName, fileName, platformSlug)
             }
+
+            // Persist download record in Room so UI shows the checkmark
+            val platformId = inputData.getInt(KEY_PLATFORM_ID, 0)
+            val db = RomSyncDatabase.getDatabase(applicationContext)
+            db.romDao().insertDownloadedRom(
+                DownloadedRomEntity(
+                    romId = romId,
+                    name = romName,
+                    fileName = fileName,
+                    platformId = platformId,
+                    platformSlug = platformSlug,
+                    localPath = targetFile.absolutePath,
+                    fileSizeBytes = targetFile.length(),
+                ),
+            )
 
             Result.success(workDataOf(
                 KEY_ROM_ID to romId, KEY_ROM_NAME to romName,
