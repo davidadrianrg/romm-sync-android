@@ -42,6 +42,12 @@
             </intent-filter>
         </activity>
 
+        <!-- WorkManager foreground service with dataSync type (Android 14+) -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
         <!-- Disable default WorkManager initializer — we use on-demand config -->
         <provider
             android:name="androidx.startup.InitializationProvider"
