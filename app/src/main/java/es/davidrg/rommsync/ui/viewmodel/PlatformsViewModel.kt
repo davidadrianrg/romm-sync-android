@@ -53,6 +53,18 @@ class PlatformsViewModel(
         }
     }
 
+    fun updatePlatformEmulator(platformId: Int, emulatorId: String?) {
+        viewModelScope.launch {
+            romRepository.updatePlatformEmulator(platformId, emulatorId)
+        }
+    }
+
+    fun updatePlatformSavesPath(platformId: Int, path: String?) {
+        viewModelScope.launch {
+            romRepository.updatePlatformSavesPath(platformId, path?.takeIf { it.isNotBlank() })
+        }
+    }
+
     fun setAllVisible(visible: Boolean) {
         viewModelScope.launch {
             platforms.value.forEach { platform ->

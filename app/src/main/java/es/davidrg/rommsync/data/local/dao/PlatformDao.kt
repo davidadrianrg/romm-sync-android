@@ -46,6 +46,15 @@ interface PlatformDao {
     @Query("UPDATE platforms SET visible = :visible WHERE id = :id")
     suspend fun updateVisibility(id: Int, visible: Boolean)
 
+    @Query("UPDATE platforms SET emulatorId = :emulatorId WHERE id = :id")
+    suspend fun updateEmulator(id: Int, emulatorId: String?)
+
+    @Query("UPDATE platforms SET savesPathOverride = :path WHERE id = :id")
+    suspend fun updateSavesPathOverride(id: Int, path: String?)
+
     @Query("SELECT COUNT(*) FROM platforms")
     suspend fun count(): Int
+
+    @Query("SELECT * FROM platforms")
+    fun getAllPlatformsBlocking(): List<PlatformEntity>
 }

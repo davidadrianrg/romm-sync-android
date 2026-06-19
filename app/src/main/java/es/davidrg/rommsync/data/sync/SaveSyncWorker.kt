@@ -42,6 +42,7 @@ class SaveSyncWorker(
         val coordinator = SyncCoordinator(
             settingsDataStore = dataStore,
             romDao = database.romDao(),
+            platformDao = database.platformDao(),
             cacheDir = applicationContext.cacheDir,
         )
 

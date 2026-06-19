@@ -17,6 +17,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Deselect
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.outlined.Storage
@@ -25,8 +27,11 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -38,6 +43,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -184,6 +192,8 @@ fun PlatformsScreen() {
                     PlatformCard(
                         platform = platform,
                         onToggle = { viewModel.togglePlatformVisibility(it) },
+                        onEmulatorChange = { id, emu -> viewModel.updatePlatformEmulator(id, emu) },
+                        onSavesPathChange = { id, path -> viewModel.updatePlatformSavesPath(id, path) },
                     )
                 }
             }
@@ -192,7 +202,21 @@ fun PlatformsScreen() {
 }
 
 @Composable
-private fun PlatformCard(platform: Platform, onToggle: (Platform) -> Unit) {
+private fun PlatformCard(
+    platform: Platform,
+    onToggle: (Platform) -> Unit,
+    onEmulatorChange: (Int, String?) -> Unit,
+    onSavesPathChange: (Int, String?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val availableEmulators = remember(platform.slug) {
+        es.davidrg.rommsync.data.sync.platform.SaveHandlerRegistry.getAvailableEmulators(platform.slug)
+    }
+    val defaultEmulator = remember(platform.slug) {
+        es.davidrg.rommsync.data.sync.platform.SaveHandlerRegistry.getDefaultEmulator(platform.slug)
+    }
+    val currentEmulator = platform.emulatorId ?: defaultEmulator.id
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -204,64 +228,120 @@ private fun PlatformCard(platform: Platform, onToggle: (Platform) -> Unit) {
             },
         ),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
             Row(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                // Avatar con inicial de la plataforma
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .background(
-                            if (platform.visible) MaterialTheme.colorScheme.primaryContainer
-                            else MaterialTheme.colorScheme.surfaceContainerHighest,
-                            CircleShape,
-                        ),
-                    contentAlignment = Alignment.Center,
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = platform.slug.take(2).uppercase(),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (platform.visible) MaterialTheme.colorScheme.onPrimaryContainer
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(
+                                if (platform.visible) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                CircleShape,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = platform.slug.take(2).uppercase(),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (platform.visible) MaterialTheme.colorScheme.onPrimaryContainer
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(modifier = Modifier.size(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            platform.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            "${platform.slug} • ${platform.romCount} ROMs • $currentEmulator",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                // Botón de expandir configuración de sync
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(
+                        if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = "Configurar sync",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Spacer(modifier = Modifier.size(14.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        platform.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        "${platform.slug} • ${platform.romCount} ROMs",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                Switch(
+                    checked = platform.visible,
+                    onCheckedChange = { onToggle(platform) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                        checkedTrackColor = MaterialTheme.colorScheme.primary,
+                        uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    ),
+                )
             }
-            Switch(
-                checked = platform.visible,
-                onCheckedChange = { onToggle(platform) },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primary,
-                    uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                ),
-            )
+
+            // Panel expandible con config de sync
+            if (expanded) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    "Configuración de sync",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Selector de emulador
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    availableEmulators.forEach { emu ->
+                        FilterChip(
+                            selected = currentEmulator == emu.id,
+                            onClick = {
+                                onEmulatorChange(
+                                    platform.id,
+                                    if (emu.id == defaultEmulator.id) null else emu.id,
+                                )
+                            },
+                            label = { Text(emu.displayName) },
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Override de ruta de saves
+                var pathOverride by remember(platform.savesPathOverride) {
+                    mutableStateOf(platform.savesPathOverride ?: "")
+                }
+                OutlinedTextField(
+                    value = pathOverride,
+                    onValueChange = {
+                        pathOverride = it
+                        onSavesPathChange(platform.id, it.ifBlank { null })
+                    },
+                    label = { Text("Ruta de saves (vacío = por defecto)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    textStyle = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
     }
 }

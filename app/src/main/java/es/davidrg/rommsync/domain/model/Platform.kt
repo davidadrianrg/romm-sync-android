@@ -6,4 +6,6 @@ data class Platform(
     val name: String,
     val romCount: Int,
     val visible: Boolean = true,
+    val emulatorId: String? = null,
+    val savesPathOverride: String? = null,
 )

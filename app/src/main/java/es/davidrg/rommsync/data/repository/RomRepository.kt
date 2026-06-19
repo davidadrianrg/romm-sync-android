@@ -93,6 +93,14 @@ class RomRepository(
         platformDao.updateVisibility(id, visible)
     }
 
+    suspend fun updatePlatformEmulator(id: Int, emulatorId: String?) {
+        platformDao.updateEmulator(id, emulatorId)
+    }
+
+    suspend fun updatePlatformSavesPath(id: Int, path: String?) {
+        platformDao.updateSavesPathOverride(id, path)
+    }
+
     // ── ROMs ───────────────────────────────────────────────────────────
 
     /**
@@ -206,6 +214,8 @@ class RomRepository(
         name = name,
         romCount = romCount,
         visible = visible,
+        emulatorId = emulatorId,
+        savesPathOverride = savesPathOverride,
     )
 
     private fun RomDto.toDomain(): Rom {

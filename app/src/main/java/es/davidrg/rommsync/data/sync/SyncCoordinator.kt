@@ -15,6 +15,7 @@ import es.davidrg.rommsync.data.remote.dto.SessionCompleteRequest
 import es.davidrg.rommsync.data.sync.platform.LocalSave
 import es.davidrg.rommsync.data.sync.platform.RetroArchSaveHandler
 import es.davidrg.rommsync.data.sync.platform.SaveHandler
+import es.davidrg.rommsync.data.sync.platform.SaveHandlerRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -39,10 +40,9 @@ import java.util.TimeZone
 class SyncCoordinator(
     private val settingsDataStore: SettingsDataStore,
     private val romDao: RomDao,
+    private val platformDao: es.davidrg.rommsync.data.local.dao.PlatformDao,
     private val cacheDir: File,
 ) {
-
-    private val saveHandler: SaveHandler = RetroArchSaveHandler()
 
     /**
      * Ejecuta un ciclo completo de sync. Devuelve un resumen del resultado.
@@ -68,13 +68,33 @@ class SyncCoordinator(
             return@withContext SyncResult(message = "No hay ROMs descargados para sincronizar")
         }
 
+        // Cargar configuración de plataformas para resolver handlers
+        val platformConfigs = platformDao.getAllPlatformsBlocking()
+            .associateBy { it.slug }
+
         val localSavesMap = mutableMapOf<Int, List<LocalSave>>()
+        val handlerByRom = mutableMapOf<Int, SaveHandler>()
+
         for (rom in downloadedRoms) {
-            val saves = saveHandler.findSaves(
+            val config = platformConfigs[rom.platformSlug]
+            val handler = SaveHandlerRegistry.getHandler(
+                platformSlug = rom.platformSlug,
+                emulatorId = config?.emulatorId,
+            )
+            handlerByRom[rom.romId] = handler
+
+            val effectiveBasePath = config?.savesPathOverride?.takeIf { it.isNotBlank() }
+                ?: SaveHandlerRegistry.getDefaultSavesPath(
+                    emulatorId = config?.emulatorId
+                        ?: SaveHandlerRegistry.getDefaultEmulator(rom.platformSlug).id,
+                    retroArchBase = retroArchBase,
+                )
+
+            val saves = handler.findSaves(
                 romId = rom.romId,
                 romFileName = rom.fileName,
                 platformSlug = rom.platformSlug,
-                savesBasePath = retroArchBase,
+                savesBasePath = effectiveBasePath,
             )
             if (saves.isNotEmpty()) {
                 localSavesMap[rom.romId] = saves
@@ -122,8 +142,9 @@ class SyncCoordinator(
             when (op.type) {
                 "upload" -> {
                     val save = localSavesMap[op.romId]?.find { it.fileName == op.file }
-                    if (save != null) {
-                        val ok = executeUpload(api, save, op.romId)
+                    val handler = handlerByRom[op.romId]
+                    if (save != null && handler != null) {
+                        val ok = executeUpload(api, save, op.romId, handler)
                         if (ok) completed++ else failed++
                     } else {
                         failed++
@@ -131,13 +152,22 @@ class SyncCoordinator(
                 }
                 "download" -> {
                     val rom = downloadedRoms.find { it.romId == op.romId }
-                    if (rom != null && op.source != null) {
+                    val handler = handlerByRom[op.romId]
+                    if (rom != null && op.source != null && handler != null) {
+                        val config = platformConfigs[rom.platformSlug]
+                        val effectiveBasePath = config?.savesPathOverride?.takeIf { it.isNotBlank() }
+                            ?: SaveHandlerRegistry.getDefaultSavesPath(
+                                emulatorId = config?.emulatorId
+                                    ?: SaveHandlerRegistry.getDefaultEmulator(rom.platformSlug).id,
+                                retroArchBase = retroArchBase,
+                            )
                         val ok = executeDownload(
                             api = api,
                             sourceUrl = op.source,
                             rom = rom,
                             fileName = op.file,
-                            retroArchBase = retroArchBase,
+                            savesBasePath = effectiveBasePath,
+                            handler = handler,
                         )
                         if (ok) completed++ else failed++
                     } else {
@@ -200,9 +230,9 @@ class SyncCoordinator(
         }
     }
 
-    private suspend fun executeUpload(api: RomMApiService, save: LocalSave, romId: Int): Boolean {
+    private suspend fun executeUpload(api: RomMApiService, save: LocalSave, romId: Int, handler: SaveHandler): Boolean {
         return try {
-            val fileToUpload = saveHandler.prepareForUpload(save)
+            val fileToUpload = handler.prepareForUpload(save)
             val requestFile = fileToUpload.asRequestBody("application/octet-stream".toMediaType())
             val filePart = MultipartBody.Part.createFormData("file", save.fileName, requestFile)
             val romIdBody = romId.toString().toRequestBody("text/plain".toMediaType())
@@ -219,7 +249,8 @@ class SyncCoordinator(
         sourceUrl: String,
         rom: es.davidrg.rommsync.data.local.entity.DownloadedRomEntity,
         fileName: String,
-        retroArchBase: String,
+        savesBasePath: String,
+        handler: SaveHandler,
     ): Boolean {
         return try {
             // Extraer saveId del path: /api/saves/{id}/content
@@ -236,11 +267,11 @@ class SyncCoordinator(
                 }
             }
 
-            val ok = saveHandler.extractDownload(
+            val ok = handler.extractDownload(
                 tempFile = tempFile,
                 romFileName = rom.fileName,
                 platformSlug = rom.platformSlug,
-                savesBasePath = retroArchBase,
+                savesBasePath = savesBasePath,
                 targetFileName = fileName,
             )
             tempFile.delete()

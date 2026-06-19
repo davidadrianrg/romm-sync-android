@@ -16,7 +16,7 @@ import es.davidrg.rommsync.data.local.entity.PlatformEntity
         PlatformEntity::class,
         DownloadedRomEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class RomSyncDatabase : RoomDatabase() {
@@ -25,14 +25,19 @@ abstract class RomSyncDatabase : RoomDatabase() {
     abstract fun romDao(): RomDao
 
     companion object {
-        /**
-         * Migration 1 → 2: añade un índice sobre `platformId` en `downloaded_roms`
-         * para acelerar las queries filtradas por plataforma
-         * (p. ej. [RomDao.getDownloadedRomsForPlatform]).
-         */
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_downloaded_roms_platformId ON downloaded_roms(platformId)")
+            }
+        }
+
+        /**
+         * Migration 2 → 3: añade columnas de configuración de sync por plataforma.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE platforms ADD COLUMN emulatorId TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE platforms ADD COLUMN savesPathOverride TEXT DEFAULT NULL")
             }
         }
 
@@ -46,9 +51,7 @@ abstract class RomSyncDatabase : RoomDatabase() {
                     RomSyncDatabase::class.java,
                     "romsync.db"
                 )
-                    .addMigrations(MIGRATION_1_2)
-                    // Solo destructivo en downgrade: nunca en upgrade, donde
-                    // tenemos migraciones explícitas que preservan los datos.
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build()
                     .also { INSTANCE = it }
