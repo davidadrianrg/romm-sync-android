@@ -14,7 +14,7 @@ Cliente de sincronización minimalista para servidores **RomM**. Aplicación And
 ## 🛠️ Stack Tecnológico
 
 - **Lenguaje:** Kotlin
-- **UI:** Jetpack Compose + Material Design 3
+- **UI:** Jetpack Compose + Material Design 3 (tema dinámico oscuro/claro)
 - **Red:** Retrofit 2 + OkHttp 4 (interceptores de progreso)
 - **Background:** WorkManager + CoroutineWorker
 - **DB Local:** Room
@@ -56,10 +56,18 @@ Cliente de sincronización minimalista para servidores **RomM**. Aplicación And
 
 | Vista | Descripción |
 |---|---|
-| **Configuración** | URL servidor, API Key, directorio raíz, descargas simultáneas |
-| **Plataformas** | Switches mostrar/ocultar por plataforma |
-| **Biblioteca** | Rejilla de carátulas con Coil + búsqueda + filtros (Todos/Faltantes/Descargados) |
-| **Cola de Descargas** | Progreso numérico + barra, estado indeterminate para mod_zip, cancelar |
+| **Configuración** | URL servidor, API Key, directorio raíz y descargas simultáneas, agrupados en secciones (Cards) con iconos |
+| **Plataformas** | Tarjetas con avatar de inicial y switches mostrar/ocultar por plataforma; cabecera con resumen y acción de actualizar |
+| **Biblioteca** | Rejilla de carátulas con Coil, título superpuesto sobre degradado, badges de estado, búsqueda + filtros (Todos/Faltantes/Descargados) |
+| **Cola de Descargas** | Tarjetas con badge de estado por color, barra de progreso animada, estado indeterminate para mod_zip, cancelar y reintentar |
+
+### Fase 6 — Rediseño Visual (Sistema de Diseño)
+
+- **Sistema de color completo** Material 3 ("Midnight Arcade") con esquemas oscuro y claro: roles `primary`/`secondary`/`tertiary` con sus *containers*, tiers de `surfaceContainer` para profundidad, `outline`, `scrim` e `inverse`
+- **Tema adaptable** que sigue el modo del sistema (oscuro por defecto en consolas portátiles) con barras de sistema *edge-to-edge*
+- **Tipografía** con jerarquía ampliada y *letter-spacing* afinado
+- **Componentes basados en Cards** con esquinas redondeadas, badges de estado y *empty states* con icono
+- **Navegación** con iconos *outlined*/*filled* según selección e indicador en `primaryContainer`
 
 ## 🏗️ Arquitectura
 

@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -64,6 +65,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -138,7 +141,7 @@ fun LibraryScreen() {
             when (event) {
                 is LibraryEvent.DownloadStarted -> {
                     snackbarHostState.showSnackbar(
-                        message = "⬇ ${event.romName}",
+                        message = "Descargando ${event.romName}",
                         duration = SnackbarDuration.Short,
                     )
                 }
@@ -150,7 +153,7 @@ fun LibraryScreen() {
                 }
                 is LibraryEvent.Error -> {
                     snackbarHostState.showSnackbar(
-                        message = "❌ ${event.message}",
+                        message = event.message,
                         duration = SnackbarDuration.Long,
                     )
                 }
@@ -205,6 +208,9 @@ fun LibraryScreen() {
             if (!isLandscape) {
                 TopAppBar(
                     title = { Text("Biblioteca") },
+                    colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
                     actions = {
                         val showBatchButton = selectedPlatformId != null && missingRoms.isNotEmpty()
                         if (showBatchButton) {
@@ -406,7 +412,7 @@ fun LibraryScreen() {
                 ) {
                     val emptyMessage = when {
                         searchQuery.isNotBlank() -> "No hay juegos que coincidan con la búsqueda"
-                        selectedFilter == RomFilter.MISSING -> "Todos los juegos están descargados 🎉"
+                        selectedFilter == RomFilter.MISSING -> "Todos los juegos están descargados"
                         selectedFilter == RomFilter.DOWNLOADED -> "Aún no hay juegos descargados"
                         else -> "No hay juegos para esta plataforma"
                     }
@@ -544,87 +550,105 @@ private fun RomCard(
     onDownload: (RomWithStatus) -> Unit,
     onLongPress: (RomWithStatus) -> Unit,
 ) {
-    Column(
+    Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
+            .fillMaxWidth()
+            .aspectRatio(0.70f)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .combinedClickable(
                 onClick = {},
                 onLongClick = { onLongPress(romWithStatus) },
             ),
     ) {
+        AsyncImage(
+            model = romWithStatus.rom.coverUrlLarge ?: romWithStatus.rom.coverUrlSmall,
+            contentDescription = romWithStatus.rom.name,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        // Scrim degradado inferior para legibilidad del título
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(0.72f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
-        ) {
-            AsyncImage(
-                model = romWithStatus.rom.coverUrlLarge ?: romWithStatus.rom.coverUrlSmall,
-                contentDescription = romWithStatus.rom.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0.55f to Color.Transparent,
+                        1f to Color.Black.copy(alpha = 0.78f),
+                    ),
+                ),
+        )
 
-            // Downloaded badge
-            if (romWithStatus.status == DownloadStatus.DOWNLOADED) {
+        // Título superpuesto en la parte inferior
+        Text(
+            text = romWithStatus.rom.name,
+            style = MaterialTheme.typography.labelMedium,
+            color = Color.White,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+        )
+
+        // Badge de descargado
+        if (romWithStatus.status == DownloadStatus.DOWNLOADED) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(26.dp)
+                    .background(MaterialTheme.colorScheme.secondary, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
                 Icon(
                     imageVector = Icons.Filled.CheckCircle,
                     contentDescription = "Descargado",
-                    tint = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSecondary,
+                    modifier = Modifier.size(18.dp),
                 )
-            }
-
-            // Download button overlay (only for not-downloaded)
-            if (romWithStatus.status == DownloadStatus.NOT_DOWNLOADED) {
-                IconButton(
-                    onClick = { onDownload(romWithStatus) },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(4.dp)
-                        .background(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
-                            RoundedCornerShape(6.dp),
-                        ),
-                ) {
-                    Icon(
-                        Icons.Filled.Download,
-                        contentDescription = "Descargar",
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-
-            // Downloading spinner overlay
-            if (romWithStatus.status == DownloadStatus.DOWNLOADING) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(28.dp),
-                        strokeWidth = 3.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
             }
         }
 
-        Text(
-            text = romWithStatus.rom.name,
-            style = MaterialTheme.typography.labelSmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 4.dp),
-        )
+        // Botón de descarga (solo si no descargado)
+        if (romWithStatus.status == DownloadStatus.NOT_DOWNLOADED) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(34.dp)
+                    .background(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.92f),
+                        CircleShape,
+                    )
+                    .combinedClickable(onClick = { onDownload(romWithStatus) }),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.Download,
+                    contentDescription = "Descargar",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+
+        // Overlay de descarga en curso
+        if (romWithStatus.status == DownloadStatus.DOWNLOADING) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.55f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(30.dp),
+                    strokeWidth = 3.dp,
+                    color = Color.White,
+                )
+            }
+        }
     }
 }
 

@@ -8,13 +8,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material.icons.outlined.DownloadForOffline
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -23,10 +35,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -36,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -67,7 +77,6 @@ fun ConfigScreen() {
     var apiKey by remember { mutableStateOf("") }
     var apiKeyVisible by remember { mutableStateOf(false) }
 
-    // Sync local state when settings change
     LaunchedEffect(settings.serverUrl, settings.apiKey) {
         if (serverUrl.isEmpty() && settings.serverUrl.isNotEmpty()) serverUrl = settings.serverUrl
         if (apiKey.isEmpty() && settings.apiKey.isNotEmpty()) apiKey = settings.apiKey
@@ -77,6 +86,9 @@ fun ConfigScreen() {
         topBar = {
             TopAppBar(
                 title = { Text("Configuración") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
             )
         }
     ) { padding ->
@@ -88,109 +100,197 @@ fun ConfigScreen() {
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // ── Storage permission warning ──────────────────────────────
+            // ── Permiso de almacenamiento ───────────────────────────────
             if (!hasAllFilesAccess()) {
-                Text(
-                    text = "⚠️ Permiso de almacenamiento no concedido. " +
-                           "Concede acceso a todos los archivos para escribir ROMs.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                Button(onClick = {
-                    es.davidrg.rommsync.util.requestAllFilesAccess(context)
-                }) {
-                    Text("Conceder permiso")
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ),
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Outlined.WarningAmber,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                            Spacer(modifier = Modifier.size(10.dp))
+                            Text(
+                                "Permiso de almacenamiento requerido",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Concede acceso a todos los archivos para que la app pueda " +
+                                "escribir las ROMs en la estructura de carpetas de ES-DE.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        FilledTonalButton(
+                            onClick = { es.davidrg.rommsync.util.requestAllFilesAccess(context) },
+                        ) {
+                            Text("Conceder permiso")
+                        }
+                    }
                 }
-                HorizontalDivider()
             }
 
-            // ── Server URL ──────────────────────────────────────────────
-            Text("Servidor RomM", style = MaterialTheme.typography.titleMedium)
+            // ── Servidor ────────────────────────────────────────────────
+            SettingsSection(
+                icon = Icons.Outlined.Dns,
+                title = "Servidor RomM",
+            ) {
+                OutlinedTextField(
+                    value = serverUrl,
+                    onValueChange = { serverUrl = it },
+                    label = { Text("URL del servidor") },
+                    placeholder = { Text("https://romm.midominio.com") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri,
+                    ),
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = apiKey,
+                    onValueChange = { apiKey = it },
+                    label = { Text("API Key") },
+                    placeholder = { Text("rmm_...") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    visualTransformation = if (apiKeyVisible) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    trailingIcon = {
+                        IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
+                            Icon(
+                                imageVector = if (apiKeyVisible) Icons.Filled.VisibilityOff
+                                              else Icons.Filled.Visibility,
+                                contentDescription = "Mostrar u ocultar API Key",
+                            )
+                        }
+                    },
+                )
+            }
 
-            OutlinedTextField(
-                value = serverUrl,
-                onValueChange = { serverUrl = it },
-                label = { Text("URL del servidor") },
-                placeholder = { Text("https://romm.midominio.com") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri,
-                ),
-            )
+            // ── Almacenamiento ──────────────────────────────────────────
+            SettingsSection(
+                icon = Icons.Outlined.Folder,
+                title = "Directorio de ROMs (ES-DE)",
+            ) {
+                OutlinedTextField(
+                    value = settings.romsRootPath,
+                    onValueChange = { viewModel.setRomsRootPath(it) },
+                    label = { Text("Ruta raíz") },
+                    placeholder = { Text("/storage/emulated/0/ROMs") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    trailingIcon = {
+                        Icon(Icons.Filled.Folder, contentDescription = "Directorio")
+                    },
+                )
+            }
 
-            // ── API Key ─────────────────────────────────────────────────
-            OutlinedTextField(
-                value = apiKey,
-                onValueChange = { apiKey = it },
-                label = { Text("API Key") },
-                placeholder = { Text("rmm_...") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                visualTransformation = if (apiKeyVisible) {
-                    VisualTransformation.None
-                } else {
-                    PasswordVisualTransformation()
-                },
-                trailingIcon = {
-                    IconButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
-                        Icon(
-                            imageVector = if (apiKeyVisible) Icons.Filled.VisibilityOff
-                                          else Icons.Filled.Visibility,
-                            contentDescription = "Mostrar/ocultar API Key",
-                        )
-                    }
-                },
-            )
+            // ── Descargas ───────────────────────────────────────────────
+            SettingsSection(
+                icon = Icons.Outlined.DownloadForOffline,
+                title = "Descargas simultáneas",
+            ) {
+                Text(
+                    "${settings.maxConcurrentDownloads} ${if (settings.maxConcurrentDownloads == 1) "descarga" else "descargas"} en paralelo",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Slider(
+                    value = settings.maxConcurrentDownloads.toFloat(),
+                    onValueChange = { viewModel.setMaxConcurrentDownloads(it.toInt()) },
+                    valueRange = 1f..5f,
+                    steps = 3,
+                )
+            }
 
-            // ── ROMs root path ──────────────────────────────────────────
-            Text("Directorio de ROMs (ES-DE)", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(4.dp))
 
-            OutlinedTextField(
-                value = settings.romsRootPath,
-                onValueChange = { viewModel.setRomsRootPath(it) },
-                label = { Text("Ruta raíz") },
-                placeholder = { Text("/storage/emulated/0/ROMs") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                trailingIcon = {
-                    Icon(Icons.Filled.Folder, contentDescription = "Directorio")
-                },
-            )
-
-            // ── Max concurrent downloads ────────────────────────────────
-            Text("Descargas simultáneas: ${settings.maxConcurrentDownloads}",
-                style = MaterialTheme.typography.titleMedium)
-
-            Slider(
-                value = settings.maxConcurrentDownloads.toFloat(),
-                onValueChange = { viewModel.setMaxConcurrentDownloads(it.toInt()) },
-                valueRange = 1f..5f,
-                steps = 3,
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // ── Save button ─────────────────────────────────────────────
+            // ── Guardar ─────────────────────────────────────────────────
             Button(
                 onClick = {
                     viewModel.setServerUrl(serverUrl)
                     viewModel.setApiKey(apiKey)
                     container.configureApi(serverUrl, apiKey)
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
                 enabled = serverUrl.isNotBlank() && apiKey.isNotBlank(),
             ) {
-                Text("Guardar configuración")
+                Text("Guardar configuración", style = MaterialTheme.typography.labelLarge)
             }
 
             if (settings.isConfigured) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Outlined.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text(
+                        text = "Servidor configurado",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsSection(
+    icon: ImageVector,
+    title: String,
+    content: @Composable () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.size(10.dp))
                 Text(
-                    text = "✓ Servidor configurado",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary,
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
+            Spacer(modifier = Modifier.height(14.dp))
+            content()
         }
     }
 }
