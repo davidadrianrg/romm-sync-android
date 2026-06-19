@@ -38,6 +38,9 @@ class SettingsDataStore(private val context: Context) {
         val SERVER_URL = stringPreferencesKey("server_url")
         val ROMS_ROOT_PATH = stringPreferencesKey("roms_root_path")
         val MAX_CONCURRENT_DOWNLOADS = intPreferencesKey("max_concurrent_downloads")
+        val RETROARCH_BASE_PATH = stringPreferencesKey("retroarch_base_path")
+        val DEVICE_ID = intPreferencesKey("sync_device_id")
+        val SAVE_SYNC_ENABLED = stringPreferencesKey("save_sync_enabled")
 
         /**
          * Legacy DataStore key where the API key used to live (plaintext).
@@ -52,6 +55,7 @@ class SettingsDataStore(private val context: Context) {
 
         const val DEFAULT_ROMS_PATH = "/storage/emulated/0/ROMs"
         const val DEFAULT_MAX_DOWNLOADS = 2
+        const val DEFAULT_RETROARCH_PATH = "/storage/emulated/0/RetroArch"
     }
 
     /**
@@ -107,6 +111,13 @@ class SettingsDataStore(private val context: Context) {
     val maxConcurrentDownloads: Flow<Int> = context.dataStore.data.map {
         it[MAX_CONCURRENT_DOWNLOADS] ?: DEFAULT_MAX_DOWNLOADS
     }
+    val retroArchBasePath: Flow<String> = context.dataStore.data.map {
+        it[RETROARCH_BASE_PATH] ?: DEFAULT_RETROARCH_PATH
+    }
+    val syncDeviceId: Flow<Int?> = context.dataStore.data.map { it[DEVICE_ID] }
+    val saveSyncEnabled: Flow<Boolean> = context.dataStore.data.map {
+        (it[SAVE_SYNC_ENABLED] ?: "false") == "true"
+    }
 
     /** Combined settings snapshot */
     val settings: Flow<ServerConfig> = combine(
@@ -142,6 +153,18 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setMaxConcurrentDownloads(max: Int) {
         context.dataStore.edit { it[MAX_CONCURRENT_DOWNLOADS] = max.coerceIn(1, 5) }
+    }
+
+    suspend fun setRetroArchBasePath(path: String) {
+        context.dataStore.edit { it[RETROARCH_BASE_PATH] = path.trimEnd('/') }
+    }
+
+    suspend fun setSyncDeviceId(id: Int) {
+        context.dataStore.edit { it[DEVICE_ID] = id }
+    }
+
+    suspend fun setSaveSyncEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[SAVE_SYNC_ENABLED] = if (enabled) "true" else "false" }
     }
 
     // ── Blocking readers (for WorkManager / non-coroutine callers) ────
@@ -189,6 +212,18 @@ class SettingsDataStore(private val context: Context) {
                     ?: DEFAULT_MAX_DOWNLOADS
             }
         }.getOrDefault(DEFAULT_MAX_DOWNLOADS).coerceIn(1, 5)
+    }
+
+    fun getRetroArchBasePathBlocking(): String {
+        return runCatching {
+            runBlocking { context.dataStore.data.first()[RETROARCH_BASE_PATH] ?: DEFAULT_RETROARCH_PATH }
+        }.getOrDefault(DEFAULT_RETROARCH_PATH)
+    }
+
+    fun getSyncDeviceIdBlocking(): Int? {
+        return runCatching {
+            runBlocking { context.dataStore.data.first()[DEVICE_ID] }
+        }.getOrNull()
     }
 }
 

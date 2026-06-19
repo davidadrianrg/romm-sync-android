@@ -30,4 +30,13 @@ interface RomDao {
 
     @Query("SELECT COUNT(*) FROM downloaded_roms")
     fun totalDownloaded(): Flow<Int>
+
+    @Query("SELECT * FROM downloaded_roms")
+    suspend fun getAllDownloadedRoms(): List<DownloadedRomEntity>
+
+    /**
+     * Versión blocking para uso en WorkManager / SyncCoordinator.
+     */
+    @Query("SELECT * FROM downloaded_roms")
+    fun getAllDownloadedRomsBlocking(): List<DownloadedRomEntity>
 }

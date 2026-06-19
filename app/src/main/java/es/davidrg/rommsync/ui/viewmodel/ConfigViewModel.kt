@@ -36,4 +36,8 @@ class ConfigViewModel(
     fun setMaxConcurrentDownloads(max: Int) {
         viewModelScope.launch { settingsRepository.setMaxConcurrentDownloads(max) }
     }
+
+    fun setRetroArchBasePath(path: String) {
+        viewModelScope.launch { settingsRepository.setRetroArchBasePath(path) }
+    }
 }

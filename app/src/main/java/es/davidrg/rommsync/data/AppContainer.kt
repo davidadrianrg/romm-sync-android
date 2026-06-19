@@ -5,6 +5,7 @@ import es.davidrg.rommsync.data.local.RomSyncDatabase
 import es.davidrg.rommsync.data.local.SettingsDataStore
 import es.davidrg.rommsync.data.repository.RomRepository
 import es.davidrg.rommsync.data.repository.SettingsRepository
+import es.davidrg.rommsync.data.sync.SaveSyncManager
 import es.davidrg.rommsync.download.DownloadManager
 
 /**
@@ -30,6 +31,8 @@ class AppContainer(private val appContext: Context) {
     )
 
     val downloadManager = DownloadManager(appContext)
+
+    val saveSyncManager = SaveSyncManager(appContext)
 
     /**
      * Called when server settings change to refresh the API client.
