@@ -15,6 +15,8 @@ object SaveHandlerRegistry {
     private val melonDsHandler = MelonDsSaveHandler()
     private val ppssppHandler = PpssppSaveHandler()
     private val ps2Handler = Ps2SaveHandler()
+    private val dolphinHandler = DolphinSaveHandler()
+    private val switchHandler = SwitchSaveHandler()
 
     /**
      * Emuladores soportados con sus IDs para configuración por plataforma.
@@ -25,6 +27,7 @@ object SaveHandlerRegistry {
         PPSSPP("ppsspp", "PPSSPP"),
         AETHERSX2("aethersx2", "AetherSX2/NetherSX2"),
         DOLPHIN("dolphin", "Dolphin"),
+        EDEN("eden", "Eden"),
     }
 
     /**
@@ -36,7 +39,9 @@ object SaveHandlerRegistry {
             "nds", "ds" -> listOf(EmulatorId.MELONDS, EmulatorId.RETROARCH)
             "psp" -> listOf(EmulatorId.PPSSPP, EmulatorId.RETROARCH)
             "ps2" -> listOf(EmulatorId.AETHERSX2, EmulatorId.RETROARCH)
-            "gc", "gamecube", "wii" -> listOf(EmulatorId.DOLPHIN, EmulatorId.RETROARCH)
+            "gc", "gamecube", "ngc" -> listOf(EmulatorId.DOLPHIN, EmulatorId.RETROARCH)
+            "wii" -> listOf(EmulatorId.DOLPHIN, EmulatorId.RETROARCH)
+            "switch" -> listOf(EmulatorId.EDEN)
             else -> listOf(EmulatorId.RETROARCH)
         }
     }
@@ -49,7 +54,8 @@ object SaveHandlerRegistry {
             "nds", "ds" -> EmulatorId.MELONDS
             "psp" -> EmulatorId.PPSSPP
             "ps2" -> EmulatorId.AETHERSX2
-            "gc", "gamecube", "wii" -> EmulatorId.DOLPHIN
+            "gc", "gamecube", "ngc", "wii" -> EmulatorId.DOLPHIN
+            "switch" -> EmulatorId.EDEN
             else -> EmulatorId.RETROARCH
         }
     }
@@ -64,6 +70,8 @@ object SaveHandlerRegistry {
             EmulatorId.MELONDS.id -> melonDsHandler
             EmulatorId.PPSSPP.id -> ppssppHandler
             EmulatorId.AETHERSX2.id -> ps2Handler
+            EmulatorId.DOLPHIN.id -> dolphinHandler
+            EmulatorId.EDEN.id -> switchHandler
             EmulatorId.RETROARCH.id -> retroArchHandler
             else -> retroArchHandler
         }
@@ -77,6 +85,8 @@ object SaveHandlerRegistry {
             EmulatorId.MELONDS.id -> MelonDsSaveHandler.DEFAULT_SAVES_PATH
             EmulatorId.PPSSPP.id -> PpssppSaveHandler.DEFAULT_SAVES_PATH
             EmulatorId.AETHERSX2.id -> Ps2SaveHandler.DEFAULT_SAVES_PATH
+            EmulatorId.DOLPHIN.id -> DolphinSaveHandler.DEFAULT_SAVES_PATH
+            EmulatorId.EDEN.id -> SwitchSaveHandler.DEFAULT_SAVES_PATH
             else -> retroArchBase
         }
     }
