@@ -6,10 +6,11 @@ Cliente de sincronización minimalista para servidores **RomM**. Aplicación And
 
 - **Descarga directa** de ROMs desde un servidor RomM a la estructura de carpetas de ES-DE
 - **Eliminación de descargas** que borra el ROM del disco y lo desmarca como descargado
+- **Sincronización bidireccional de saves** con el servidor (RetroArch, melonDS, PPSSPP, AetherSX2, Dolphin y Eden)
 - **Autenticación por API Key** (sin login OAuth/CSRF)
 - **Motor de descarga resilient** con WorkManager + CoroutineWorker
 - **Soporte mod_zip** para descargas dinámicas sin tamaño fijo
-- **Sincronización bidireccional** de guardados y estados de emuladores
+- **Configuración de emulador por plataforma** con ruta de saves personalizable
 - **UI minimalista** optimizada para pantallas táctiles de consolas portátiles
 
 ## 🛠️ Stack Tecnológico
@@ -70,6 +71,39 @@ Cliente de sincronización minimalista para servidores **RomM**. Aplicación And
 - **Componentes basados en Cards** con esquinas redondeadas, badges de estado y *empty states* con icono
 - **Navegación** con iconos *outlined*/*filled* según selección e indicador en `primaryContainer`
 
+### Fase 7 — Sincronización de Saves (Device Sync Protocol)
+
+Sincronización bidireccional de partidas guardadas con el servidor RomM,
+siguiendo el [Device Sync Protocol](https://docs.romm.app/latest/developers/device-sync-protocol/) (RomM 4.9+).
+
+**Flujo del protocolo:**
+
+1. Registro del dispositivo (`POST /api/devices`, `device_id` cacheado)
+2. Negociación (`POST /api/sync/negotiate`): el cliente envía sus saves (nombre, mtime, sha1) y el servidor responde con operaciones `upload`/`download`/`conflict`/`noop`
+3. Ejecución (`POST /api/saves`, `GET /api/saves/{id}/content`)
+4. Cierre de sesión (`POST /api/sync/sessions/{id}/complete`)
+
+**Handlers por emulador** (patrón Strategy en `data/sync/platform/`):
+
+| Plataforma | Emulador (defecto) | Estructura de saves |
+|---|---|---|
+| Retro (NES-N64, GBA, PSX...) | RetroArch | `{base}/saves/{slug}/{rom}.srm` y `states/{slug}/{rom}.state*` (slugs ES-DE) |
+| DS | melonDS (o RetroArch) | `{base}/{rom}.sav` plano |
+| PSP | PPSSPP | `{base}/PSP/SAVEDATA/{discId}*` (carpetas agrupadas en zip) |
+| PS2 | AetherSX2/NetherSX2 | `{base}/memcards/{card}.ps2/{BAserial}/` (folder memory card) |
+| GameCube | Dolphin | `{base}/GC/{region}/Card A/{gameId}*.gci` |
+| Wii | Dolphin | `{base}/Wii/title/{high}/{low}/data/` |
+| Switch | Eden | `{base}/nand/user/save/{userId}/{profileId}/{titleId}/` |
+
+**Configuración:** desde la pestaña Plataformas, cada plataforma permite elegir
+emulador y una ruta de saves personalizada (override). La ruta base de RetroArch
+se configura en Configuración. La sincronización se dispara manualmente con el
+botón "Sincronizar ahora" y corre como `CoroutineWorker` con notificación
+foreground.
+
+> ⚠️ Para PS2 se requiere activar **Folder Memory Card** en el emulador para
+> sincronizar por juego (en vez de una memory card monolítica de 8 MB).
+
 ## 🏗️ Arquitectura
 
 ```
@@ -96,6 +130,19 @@ app/src/main/java/es/davidrg/rommsync/
 │   ├── DownloadWorker.kt           # CoroutineWorker (stream + mod_zip extract)
 │   ├── DownloadManager.kt          # WorkManager queue management
 │   └── PathMapper.kt               # RomM slug → ES-DE folder mapping
+├── data/sync/
+│   ├── SyncCoordinator.kt          # Orquesta negotiate → execute → complete
+│   ├── SaveSyncWorker.kt           # CoroutineWorker de sincronización
+│   ├── SaveSyncManager.kt          # API para la UI (trigger + estado)
+│   └── platform/                   # Handlers por emulador (Strategy)
+│       ├── SaveHandler.kt          # Interfaz base + LocalSave
+│       ├── SaveHandlerRegistry.kt  # Selección de handler por plataforma/emulador
+│       ├── RetroArchSaveHandler.kt
+│       ├── MelonDsSaveHandler.kt
+│       ├── PpssppSaveHandler.kt
+│       ├── Ps2SaveHandler.kt
+│       ├── DolphinSaveHandler.kt
+│       └── SwitchSaveHandler.kt
 ├── ui/
 │   ├── theme/                      # Material3 dark-first theme
 │   ├── navigation/                 # NavHost + bottom bar (4 tabs)
@@ -126,7 +173,7 @@ No se solicita usuario/contraseña — solo autenticación por API Key para evit
 └── ...
 ```
 
-## � Compilación y Firma (CI/CD)
+## 🔐 Compilación y Firma (CI/CD)
 
 Cada push a `master` dispara el workflow de GitHub Actions que compila el APK de release (R8 + shrink) y lo publica como GitHub Release.
 
@@ -153,6 +200,6 @@ Para firmar en local, crea un `keystore.properties` en la raíz (ignorado por gi
 ./gradlew assembleRelease
 ```
 
-## �📄 Licencia
+## 📄 Licencia
 
 MIT

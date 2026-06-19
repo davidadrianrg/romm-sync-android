@@ -40,20 +40,20 @@ Bearer token (`rmm_...`), el mismo que ya usamos. Scopes requeridos:
 data/sync/
 ├── SaveSyncWorker.kt              # CoroutineWorker (WorkManager)
 ├── SyncCoordinator.kt             # Orquesta negotiate → execute → complete
-├── SyncPayloads.kt                # DTOs: NegotiateRequest/Response, Operation
-├── DeviceRegistration.kt          # Registro y cache del device_id
-├── ConflictResolver.kt            # Lógica y UI de resolución de conflictos
-├── SaveScanner.kt                 # Escanea saves locales por plataforma
+├── SaveSyncManager.kt             # API para la UI (trigger + observar estado)
 └── platform/                      # Handlers por plataforma/emulador
-    ├── SaveHandler.kt             # Interfaz base
+    ├── SaveHandler.kt             # Interfaz base + LocalSave
+    ├── SaveHandlerRegistry.kt     # Selecciona handler por (plataforma, emulador)
     ├── RetroArchSaveHandler.kt    # Ficheros planos .srm/.state por slug
     ├── MelonDsSaveHandler.kt      # DS: .sav plano por nombre ROM
-    ├── PspSaveHandler.kt          # PSP: carpetas por disc-id
-    ├── Ps2SaveHandler.kt          # PS2: folder memory card por serial
-    ├── GciSaveHandler.kt          # GameCube: GCI bundles
-    ├── SwitchSaveHandler.kt       # Switch: carpetas por title-id
-    └── SaveHandlerRegistry.kt     # Selecciona handler por (plataforma, emulador)
+    ├── PpssppSaveHandler.kt       # PSP: carpetas por disc-id (zip)
+    ├── Ps2SaveHandler.kt          # PS2: folder memory card por serial (zip)
+    ├── DolphinSaveHandler.kt      # GC: GCI por game-id; Wii: title/data (zip)
+    └── SwitchSaveHandler.kt       # Switch (Eden): carpeta por title-id (zip)
 ```
+
+> Estado: implementado. Los DTOs del protocolo viven en
+> `data/remote/dto/SyncDto.kt` y los endpoints en `RomMApiService`.
 
 ### Interfaz SaveHandler
 
@@ -149,13 +149,18 @@ Requiere extracción de serial del ISO.
 
 O en modo carpeta: subcarpetas por game-id. Se bundlean como zip.
 
-### Switch — Yuzu/Sudachi
+### Switch — Eden (fork de Yuzu)
 
 ```
-{yuzuBase}/nand/user/save/{userId}/{titleId}/
+{edenBase}/nand/user/save/{userId}/{profileId}/{titleId}/
 ```
 
-`{titleId}` = 16 chars hex.
+Ruta base por defecto en Android:
+`/storage/emulated/0/Android/data/dev.eden.eden_emulator/files`
+
+`{titleId}` = 16 chars hex (p.ej. `0100000000010000`). `{userId}` y
+`{profileId}` son IDs de 16 hex chars asignados por el emulador. La carpeta
+del título se zipea entera para sync.
 
 ---
 
@@ -173,16 +178,23 @@ Cuando el servidor devuelve `"type": "conflict"`:
 
 ## Prioridad de implementación
 
-| Fase | Alcance | Complejidad |
-|------|---------|-------------|
-| A    | Infraestructura: registro dispositivo, SyncWorker, negotiate/execute/complete | Media |
-| B    | RetroArch handler (saves + states por slug/nombre) | Baja |
-| C    | melonDS handler (DS, fichero plano) | Baja |
-| D    | Configuración por plataforma (ruta override, selector emulador) | Media |
-| E    | PPSSPP handler (carpetas por disc-id) | Media-alta |
-| F    | PS2 handler (folder memcard por serial) | Alta |
-| G    | Dolphin/GCI handler | Alta |
-| H    | Switch handler | Media |
+| Fase | Alcance | Estado |
+|------|---------|--------|
+| A    | Infraestructura: registro dispositivo, SyncWorker, negotiate/execute/complete | Implementado |
+| B    | RetroArch handler (saves + states por slug/nombre) | Implementado |
+| C    | melonDS handler (DS, fichero plano) | Implementado |
+| D    | Configuración por plataforma (ruta override, selector emulador) | Implementado |
+| E    | PPSSPP handler (carpetas por disc-id) | Implementado |
+| F    | PS2 handler (folder memcard por serial) | Implementado |
+| G    | Dolphin handler (GC GCI + Wii title/data) | Implementado |
+| H    | Switch handler (Eden, carpetas por title-id) | Implementado |
+
+### Pendiente / mejoras futuras
+
+- Extracción de title-id/serial desde headers de ISO/ROM (actualmente se
+  infiere del nombre del fichero). Mejoraría PSP, PS2, GC/Wii y Switch.
+- UI de resolución de conflictos (actualmente se loggean y se omiten).
+- Sync periódico programado además del manual.
 
 ---
 
