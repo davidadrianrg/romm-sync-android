@@ -126,6 +126,33 @@ No se solicita usuario/contraseña — solo autenticación por API Key para evit
 └── ...
 ```
 
-## 📄 Licencia
+## � Compilación y Firma (CI/CD)
+
+Cada push a `master` dispara el workflow de GitHub Actions que compila el APK de release (R8 + shrink) y lo publica como GitHub Release.
+
+### Firma estable
+
+El APK se firma siempre con **una clave de release fija** para que las actualizaciones se instalen encima de la versión anterior sin el error de *"conflicto de paquete"* (Android rechaza actualizar si cambia el certificado de firma).
+
+La clave se inyecta en CI mediante *secrets* del repositorio (Settings → Secrets and variables → Actions):
+
+| Secret | Descripción |
+|---|---|
+| `SIGNING_KEYSTORE_BASE64` | Keystore (`.jks`) codificado en base64 |
+| `SIGNING_STORE_PASSWORD` | Contraseña del almacén |
+| `SIGNING_KEY_ALIAS` | Alias de la clave (`romm-sync`) |
+| `SIGNING_KEY_PASSWORD` | Contraseña de la clave |
+
+> ⚠️ El keystore y sus contraseñas son críticos: guárdalos con copia de seguridad. Si se pierden, no se pueden volver a publicar actualizaciones (obligaría a desinstalar/reinstalar en cada versión).
+
+### Build local
+
+Para firmar en local, crea un `keystore.properties` en la raíz (ignorado por git) con `storeFile`, `storePassword`, `keyAlias` y `keyPassword`. Si no existe, el build de release usa la clave de debug.
+
+```bash
+./gradlew assembleRelease
+```
+
+## �📄 Licencia
 
 MIT
