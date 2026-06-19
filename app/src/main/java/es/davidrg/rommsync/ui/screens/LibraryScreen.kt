@@ -1,6 +1,7 @@
 package es.davidrg.rommsync.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,8 +30,10 @@ import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -42,6 +45,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -130,6 +134,8 @@ fun LibraryScreen() {
 
     // Bottom sheet state for long-press game details
     var selectedRom by remember { mutableStateOf<Rom?>(null) }
+    // ROM pendiente de confirmación de borrado
+    var romToDelete by remember { mutableStateOf<Rom?>(null) }
     val sheetState = rememberModalBottomSheetState()
 
     // Snackbar for download feedback
@@ -148,6 +154,12 @@ fun LibraryScreen() {
                 is LibraryEvent.BatchDownloadStarted -> {
                     snackbarHostState.showSnackbar(
                         message = "Encoladas ${event.count} descargas",
+                        duration = SnackbarDuration.Short,
+                    )
+                }
+                is LibraryEvent.DownloadDeleted -> {
+                    snackbarHostState.showSnackbar(
+                        message = "Eliminado ${event.romName}",
                         duration = SnackbarDuration.Short,
                     )
                 }
@@ -243,11 +255,14 @@ fun LibraryScreen() {
                 .padding(padding)
                 .padding(horizontal = 12.dp),
         ) {
-            // In landscape: platform + search + filter chips all compact in one area
+            // En horizontal: plataforma + búsqueda + filtros + batch en una
+            // sola fila compacta, para maximizar el área de carátulas.
             if (isLandscape) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     ExposedDropdownMenuBox(
@@ -288,7 +303,15 @@ fun LibraryScreen() {
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
-                    // Batch download button in landscape
+                    // Filtros inline (compactos)
+                    RomFilter.entries.forEach { filter ->
+                        FilterChip(
+                            selected = selectedFilter == filter,
+                            onClick = { selectedFilter = filter },
+                            label = { Text(filter.label) },
+                        )
+                    }
+                    // Descargar faltantes
                     val showBatchButton = selectedPlatformId != null && missingRoms.isNotEmpty()
                     if (showBatchButton) {
                         androidx.compose.material3.FilledTonalButton(
@@ -305,20 +328,6 @@ fun LibraryScreen() {
                                 style = MaterialTheme.typography.labelLarge,
                             )
                         }
-                    }
-                }
-                // Filter chips compact row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RomFilter.entries.forEach { filter ->
-                        FilterChip(
-                            selected = selectedFilter == filter,
-                            onClick = { selectedFilter = filter },
-                            label = { Text(filter.label) },
-                        )
                     }
                 }
             } else {
@@ -496,6 +505,10 @@ fun LibraryScreen() {
                     }
                     selectedRom = null
                 },
+                onDelete = {
+                    romToDelete = selectedRom
+                    selectedRom = null
+                },
                 onClose = { selectedRom = null },
             )
         }
@@ -535,6 +548,46 @@ fun LibraryScreen() {
             },
             dismissButton = {
                 TextButton(onClick = { showBatchDialog = false }) {
+                    Text("Cancelar")
+                }
+            },
+        )
+    }
+
+    // ── Delete download confirmation dialog ───────────────────────────────
+    romToDelete?.let { rom ->
+        AlertDialog(
+            onDismissRequest = { romToDelete = null },
+            icon = {
+                Icon(
+                    Icons.Outlined.DeleteOutline,
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            },
+            title = { Text("Eliminar descarga") },
+            text = {
+                Text(
+                    "¿Eliminar «${rom.name}» de este dispositivo? " +
+                        "Se borrará el archivo del disco y volverá a marcarse como no descargado.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteDownloadedRom(rom)
+                        romToDelete = null
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { romToDelete = null }) {
                     Text("Cancelar")
                 }
             },
@@ -659,6 +712,7 @@ private fun RomDetailSheet(
     isDownloaded: Boolean,
     isDownloading: Boolean,
     onDownload: () -> Unit,
+    onDelete: () -> Unit,
     onClose: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -764,22 +818,42 @@ private fun RomDetailSheet(
         // Action button
         when {
             isDownloaded -> {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Icon(
-                        Icons.Filled.DownloadDone,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Text(
-                        "  Descargado",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.secondary,
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Filled.DownloadDone,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Text(
+                            "  Descargado",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.secondary,
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = onDelete,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                    ) {
+                        Icon(
+                            Icons.Outlined.DeleteOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Text("  Eliminar descarga")
+                    }
                 }
             }
             isDownloading -> {

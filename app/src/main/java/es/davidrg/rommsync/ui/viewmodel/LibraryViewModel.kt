@@ -129,6 +129,22 @@ class LibraryViewModel(
     }
 
     /**
+     * Elimina una ROM descargada: borra el archivo del disco y la desmarca
+     * como descargada. El estado de la UI se actualiza solo porque
+     * [downloadedIds] observa Room.
+     */
+    fun deleteDownloadedRom(rom: Rom) {
+        viewModelScope.launch {
+            val ok = romRepository.deleteDownloadedRom(rom.id)
+            if (ok) {
+                _events.emit(LibraryEvent.DownloadDeleted(rom.name))
+            } else {
+                _events.emit(LibraryEvent.Error("No se pudo borrar el archivo de ${rom.name}"))
+            }
+        }
+    }
+
+    /**
      * Batch download: enqueues every ROM in [roms] that is not already downloading.
      * Used by the "Descargar faltantes" action in the library toolbar.
      */
@@ -207,5 +223,6 @@ private fun ErrorKind.toUserMessage(): String = when (this) {
 sealed class LibraryEvent {
     data class DownloadStarted(val romName: String) : LibraryEvent()
     data class BatchDownloadStarted(val count: Int) : LibraryEvent()
+    data class DownloadDeleted(val romName: String) : LibraryEvent()
     data class Error(val message: String) : LibraryEvent()
 }

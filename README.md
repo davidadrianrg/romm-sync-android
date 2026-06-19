@@ -5,6 +5,7 @@ Cliente de sincronización minimalista para servidores **RomM**. Aplicación And
 ## ✨ Características
 
 - **Descarga directa** de ROMs desde un servidor RomM a la estructura de carpetas de ES-DE
+- **Eliminación de descargas** que borra el ROM del disco y lo desmarca como descargado
 - **Autenticación por API Key** (sin login OAuth/CSRF)
 - **Motor de descarga resilient** con WorkManager + CoroutineWorker
 - **Soporte mod_zip** para descargas dinámicas sin tamaño fijo
@@ -58,7 +59,7 @@ Cliente de sincronización minimalista para servidores **RomM**. Aplicación And
 |---|---|
 | **Configuración** | URL servidor, API Key, directorio raíz y descargas simultáneas, agrupados en secciones (Cards) con iconos |
 | **Plataformas** | Tarjetas con avatar de inicial y switches mostrar/ocultar por plataforma; cabecera con resumen y acción de actualizar |
-| **Biblioteca** | Rejilla de carátulas con Coil, título superpuesto sobre degradado, badges de estado, búsqueda + filtros (Todos/Faltantes/Descargados) |
+| **Biblioteca** | Rejilla de carátulas con Coil, título superpuesto sobre degradado, badges de estado, búsqueda + filtros (Todos/Faltantes/Descargados). Pulsación larga abre el detalle con opción de eliminar la descarga. En horizontal, los controles se agrupan en una sola fila para maximizar el área de carátulas |
 | **Cola de Descargas** | Tarjetas con badge de estado por color, barra de progreso animada, estado indeterminate para mod_zip, cancelar y reintentar |
 
 ### Fase 6 — Rediseño Visual (Sistema de Diseño)

@@ -12,8 +12,11 @@ import es.davidrg.rommsync.domain.model.ErrorKind
 import es.davidrg.rommsync.domain.model.Platform
 import es.davidrg.rommsync.domain.model.Rom
 import es.davidrg.rommsync.domain.model.RomFile
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
+import java.io.File
 import java.io.IOException
 import retrofit2.HttpException
 
@@ -171,6 +174,26 @@ class RomRepository(
 
     suspend fun removeDownloadedRom(romId: Int) {
         romDao.deleteDownloadedRom(romId)
+    }
+
+    /**
+     * Elimina una ROM descargada del dispositivo: borra el archivo (o la
+     * carpeta de un ROM multi-archivo) del disco y elimina el registro de
+     * Room para que la app la marque de nuevo como no descargada.
+     *
+     * Devuelve true si el archivo se borró correctamente (o no existía).
+     */
+    suspend fun deleteDownloadedRom(romId: Int): Boolean = withContext(Dispatchers.IO) {
+        val entity = romDao.getDownloadedRom(romId)
+        var fileDeleted = true
+        if (entity != null && entity.localPath.isNotBlank()) {
+            val file = File(entity.localPath)
+            if (file.exists()) {
+                fileDeleted = file.deleteRecursively()
+            }
+        }
+        romDao.deleteDownloadedRom(romId)
+        fileDeleted
     }
 
     suspend fun isRomDownloaded(romId: Int): Boolean = romDao.isDownloaded(romId)

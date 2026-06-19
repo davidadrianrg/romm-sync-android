@@ -13,6 +13,9 @@ interface RomDao {
     @Query("SELECT * FROM downloaded_roms WHERE platformId = :platformId")
     fun getDownloadedRomsForPlatform(platformId: Int): Flow<List<DownloadedRomEntity>>
 
+    @Query("SELECT * FROM downloaded_roms WHERE romId = :romId")
+    suspend fun getDownloadedRom(romId: Int): DownloadedRomEntity?
+
     @Query("SELECT romId FROM downloaded_roms")
     fun getAllDownloadedRomIds(): Flow<List<Int>>
 
