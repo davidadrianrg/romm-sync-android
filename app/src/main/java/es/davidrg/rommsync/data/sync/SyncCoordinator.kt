@@ -87,6 +87,7 @@ class SyncCoordinator(
                 ?: SaveHandlerRegistry.getDefaultSavesPath(
                     emulatorId = config?.emulatorId
                         ?: SaveHandlerRegistry.getDefaultEmulator(rom.platformSlug).id,
+                    platformSlug = rom.platformSlug,
                     retroArchBase = retroArchBase,
                 )
 
@@ -159,6 +160,7 @@ class SyncCoordinator(
                             ?: SaveHandlerRegistry.getDefaultSavesPath(
                                 emulatorId = config?.emulatorId
                                     ?: SaveHandlerRegistry.getDefaultEmulator(rom.platformSlug).id,
+                                platformSlug = rom.platformSlug,
                                 retroArchBase = retroArchBase,
                             )
                         val ok = executeDownload(

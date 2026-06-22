@@ -250,8 +250,9 @@ fun ConfigScreen() {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "Los saves se buscan en {ruta}/saves/{plataforma}/ " +
-                        "siguiendo la estructura de ES-DE.",
+                    "Esta ruta se usa como base para plataformas asignadas a RetroArch. " +
+                        "Puedes configurar la ruta de saves de cada plataforma " +
+                        "individualmente en la pestaña Plataformas.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

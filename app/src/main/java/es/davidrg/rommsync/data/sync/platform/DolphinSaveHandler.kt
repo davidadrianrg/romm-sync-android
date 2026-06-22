@@ -12,17 +12,19 @@ import java.util.zip.ZipOutputStream
 /**
  * Handler de saves para Dolphin (GameCube y Wii).
  *
- * GameCube (modo GCI Folder):
+ * GameCube (modo GCI Folder), basePath = directorio GC:
  * ```
- * {dolphinBase}/GC/{region}/Card A/{gameId}-*.gci
- * ```
- *
- * Wii:
- * ```
- * {dolphinBase}/Wii/title/{titleIdHigh}/{titleIdLow}/data/
+ * {basePath}/{region}/Card A/{gameId}-*.gci
  * ```
  *
- * En Android, la base es normalmente `/storage/emulated/0/dolphin-emu/`.
+ * Wii, basePath = directorio Wii/title:
+ * ```
+ * {basePath}/{titleIdHigh}/{titleIdLow}/data/
+ * ```
+ *
+ * En Android, la base por defecto es:
+ *  - GC:  `/storage/emulated/0/Android/data/org.dolphinemu.dolphinemu/files/GC`
+ *  - Wii: `/storage/emulated/0/Android/data/org.dolphinemu.dolphinemu/files/Wii/title`
  *
  * Para GC: se buscan ficheros .gci cuyo nombre empieza con el game-id (6 chars,
  * extraído del nombre del ROM). Se agrupan en zip para sync.
@@ -78,8 +80,8 @@ class DolphinSaveHandler : SaveHandler {
         basePath: String,
         results: MutableList<LocalSave>,
     ) {
-        // Buscar en todas las regiones
-        val gcDir = File(basePath, "GC")
+        // basePath ya apunta al directorio GC
+        val gcDir = File(basePath)
         if (!gcDir.isDirectory) return
 
         val gciFiles = mutableListOf<File>()
@@ -117,8 +119,9 @@ class DolphinSaveHandler : SaveHandler {
     }
 
     private fun extractGcDownload(tempFile: File, gameId: String, basePath: String): Boolean {
-        // Extraer a la primera región que exista, o USA por defecto
-        val gcDir = File(basePath, "GC")
+        // basePath ya apunta al directorio GC. Extraer a la primera region
+        // que exista, o USA por defecto
+        val gcDir = File(basePath)
         val targetRegion = REGIONS.firstOrNull { File(gcDir, "$it/Card A").isDirectory } ?: "USA"
         val cardDir = File(gcDir, "$targetRegion/Card A")
         cardDir.mkdirs()
@@ -158,16 +161,19 @@ class DolphinSaveHandler : SaveHandler {
         results: MutableList<LocalSave>,
     ) {
         // Wii title IDs: los primeros 4 chars del game-id se mapean al title-id low
-        // La estructura es: Wii/title/{high}/{low}/data/
-        val wiiTitleDir = File(basePath, "Wii/title")
+        // La estructura es: {basePath}/{high}/{low}/data/ donde basePath = Wii/title
+        val wiiTitleDir = File(basePath)
         if (!wiiTitleDir.isDirectory) return
 
         val dataDir = findWiiDataDir(wiiTitleDir, gameId) ?: return
         if (!dataDir.isDirectory || (dataDir.listFiles()?.isEmpty() != false)) return
 
-        val newestMtime = folderLastModified(dataDir)
+        // La carpeta de save del juego es {high}/{low} (contiene data/ y, a veces,
+        // content/). Se zipea relativa a Wii/title para preservar {high}/{low}/...
+        val gameSaveDir = dataDir.parentFile ?: return
+        val newestMtime = folderLastModified(gameSaveDir)
         val zipFile = File.createTempFile("dolphin_wii_${gameId}_", ".zip")
-        zipFolder(dataDir, zipFile)
+        zipFolderRelativeTo(root = wiiTitleDir, folder = gameSaveDir, output = zipFile)
 
         results.add(
             LocalSave(
@@ -181,8 +187,8 @@ class DolphinSaveHandler : SaveHandler {
     }
 
     private fun extractWiiDownload(tempFile: File, basePath: String): Boolean {
-        // Extraer directamente en Wii/title/ — el zip contiene la estructura data/...
-        val wiiTitleDir = File(basePath, "Wii/title")
+        // basePath ya apunta a Wii/title — el zip contiene la estructura {high}/{low}/data/...
+        val wiiTitleDir = File(basePath)
         wiiTitleDir.mkdirs()
 
         return try {
@@ -259,10 +265,16 @@ class DolphinSaveHandler : SaveHandler {
         return newest
     }
 
-    private fun zipFolder(folder: File, output: File) {
+    /**
+     * Zipea [folder] almacenando las entradas con su ruta relativa respecto a
+     * [root]. Se usa para Wii, donde el save debe conservar la estructura
+     * `{high}/{low}/data/...` colgando de `Wii/title` para restaurarse bien.
+     */
+    private fun zipFolderRelativeTo(root: File, folder: File, output: File) {
         ZipOutputStream(FileOutputStream(output)).use { zos ->
             folder.walkTopDown().forEach { file ->
-                val relativePath = "${folder.name}/${folder.toPath().relativize(file.toPath())}"
+                val relativePath = root.toPath().relativize(file.toPath()).toString()
+                if (relativePath.isEmpty()) return@forEach
                 if (file.isFile) {
                     zos.putNextEntry(ZipEntry(relativePath))
                     file.inputStream().use { it.copyTo(zos) }
@@ -276,8 +288,11 @@ class DolphinSaveHandler : SaveHandler {
     }
 
     companion object {
-        const val DEFAULT_SAVES_PATH = "/storage/emulated/0/dolphin-emu"
-        private val GC_SLUGS = setOf("gc", "gamecube", "ngc")
+        const val DEFAULT_GC_SAVES_PATH =
+            "/storage/emulated/0/Android/data/org.dolphinemu.dolphinemu/files/GC"
+        const val DEFAULT_WII_SAVES_PATH =
+            "/storage/emulated/0/Android/data/org.dolphinemu.dolphinemu/files/Wii/title"
+        val GC_SLUGS = setOf("gc", "gamecube", "ngc")
         private val REGIONS = listOf("USA", "EUR", "JAP")
     }
 }

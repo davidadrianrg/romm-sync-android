@@ -9,14 +9,13 @@ import java.io.File
  *
  * Estructura esperada:
  * ```
- * {melondsBase}/{romBaseName}.sav
+ * {savesBasePath}/{romBaseName}.sav
  * ```
  *
  * melonDS guarda las partidas como fichero plano `.sav` con el mismo
- * nombre base que la ROM, en una carpeta configurable (por defecto
- * `/storage/emulated/0/melonDS/saves/` o la carpeta del propio ROM).
+ * nombre base que la ROM.
  *
- * A diferencia de RetroArch, no hay subcarpetas por plataforma.
+ * Ruta por defecto: la carpeta interna de la app melonDS en Android.
  */
 class MelonDsSaveHandler : SaveHandler {
 
@@ -63,7 +62,7 @@ class MelonDsSaveHandler : SaveHandler {
     }
 
     companion object {
-        const val DEFAULT_SAVES_PATH = "/storage/emulated/0/melonDS/saves"
+        const val DEFAULT_SAVES_PATH = "/storage/emulated/0/Android/data/me.magnum.melonds/files/saves"
         private val SAVE_EXTENSIONS = listOf(".sav", ".dsv")
     }
 }
