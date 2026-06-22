@@ -35,7 +35,7 @@ class Ps2SaveHandler : SaveHandler {
         savesBasePath: String,
     ): List<LocalSave> = withContext(Dispatchers.IO) {
         val results = mutableListOf<LocalSave>()
-        val memcardsDir = File(savesBasePath, "memcards")
+        val memcardsDir = File(savesBasePath)
         if (!memcardsDir.isDirectory) return@withContext results
 
         val serial = extractSerialFromFileName(romFileName) ?: return@withContext results
@@ -79,7 +79,7 @@ class Ps2SaveHandler : SaveHandler {
         savesBasePath: String,
         targetFileName: String,
     ): Boolean = withContext(Dispatchers.IO) {
-        val memcardsDir = File(savesBasePath, "memcards")
+        val memcardsDir = File(savesBasePath)
         memcardsDir.mkdirs()
 
         val serial = extractSerialFromFileName(romFileName) ?: return@withContext false
@@ -191,6 +191,6 @@ class Ps2SaveHandler : SaveHandler {
     }
 
     companion object {
-        const val DEFAULT_SAVES_PATH = "/storage/emulated/0/AetherSX2"
+        const val DEFAULT_SAVES_PATH = "/storage/emulated/0/Android/data/xyz.aethersx2.android/files/memcards"
     }
 }

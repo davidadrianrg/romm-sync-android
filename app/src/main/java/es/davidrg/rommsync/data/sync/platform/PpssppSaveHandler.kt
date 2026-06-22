@@ -33,7 +33,7 @@ class PpssppSaveHandler : SaveHandler {
         savesBasePath: String,
     ): List<LocalSave> = withContext(Dispatchers.IO) {
         val results = mutableListOf<LocalSave>()
-        val saveDataDir = File(savesBasePath, "PSP/SAVEDATA")
+        val saveDataDir = File(savesBasePath)
         if (!saveDataDir.isDirectory) return@withContext results
 
         // Intentar buscar por disc-id si el filename tiene formato conocido
@@ -73,7 +73,7 @@ class PpssppSaveHandler : SaveHandler {
         savesBasePath: String,
         targetFileName: String,
     ): Boolean = withContext(Dispatchers.IO) {
-        val saveDataDir = File(savesBasePath, "PSP/SAVEDATA")
+        val saveDataDir = File(savesBasePath)
         saveDataDir.mkdirs()
 
         val discId = extractDiscIdFromFileName(romFileName) ?: return@withContext false
@@ -158,6 +158,6 @@ class PpssppSaveHandler : SaveHandler {
     }
 
     companion object {
-        const val DEFAULT_SAVES_PATH = "/storage/emulated/0/PSP"
+        const val DEFAULT_SAVES_PATH = "/storage/emulated/0/PSP/SAVEDATA"
     }
 }

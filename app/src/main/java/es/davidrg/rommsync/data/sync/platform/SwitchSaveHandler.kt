@@ -14,18 +14,18 @@ import java.util.zip.ZipOutputStream
  *
  * Estructura esperada (Eden en Android):
  * ```
- * {edenBase}/nand/user/save/0000000000000000/{profileId}/{titleId}/
+ * {savesBasePath}/{userId}/{profileId}/{titleId}/
  * ```
  *
  * El `titleId` son 16 caracteres hexadecimales (p.ej. `0100000000010000`
- * para Super Mario Odyssey). Se extrae del nombre del ROM si está disponible.
+ * para Super Mario Odyssey). Se extrae del nombre del ROM si esta disponible.
  * El `profileId` es otro ID de 16 hex chars asignado por el emulador al perfil
  * del usuario.
  *
- * Ruta base por defecto en Eden Android:
- * `/storage/emulated/0/Android/data/dev.eden.eden_emulator/files/`
+ * Ruta base por defecto (nand/user/save):
+ * `/storage/emulated/0/Android/data/dev.eden.eden_emulator/files/nand/user/save`
  *
- * La carpeta de saves del título se zipea entera para subir al servidor.
+ * La carpeta de saves del titulo se zipea entera para subir al servidor.
  */
 class SwitchSaveHandler : SaveHandler {
 
@@ -74,7 +74,7 @@ class SwitchSaveHandler : SaveHandler {
 
         // Determinar la ruta destino
         val saveDir = findSaveDir(savesBasePath, titleId)
-            ?: File(savesBasePath, "nand/user/save/$DEFAULT_USER_ID/$DEFAULT_PROFILE_ID/$titleId")
+            ?: File(savesBasePath, "$DEFAULT_USER_ID/$DEFAULT_PROFILE_ID/$titleId")
 
         // Borrar saves existentes antes de restaurar
         if (saveDir.isDirectory) {
@@ -110,11 +110,11 @@ class SwitchSaveHandler : SaveHandler {
 
     /**
      * Busca la carpeta de saves para un title-id en la estructura NAND.
-     * Estructura: nand/user/save/{userId}/{profileId}/{titleId}/
-     * Recorre user-ids y profile-ids para encontrar el título.
+     * Estructura: {basePath}/{userId}/{profileId}/{titleId}/
+     * Recorre user-ids y profile-ids para encontrar el titulo.
      */
     private fun findSaveDir(basePath: String, titleId: String): File? {
-        val saveRoot = File(basePath, "nand/user/save")
+        val saveRoot = File(basePath)
         if (!saveRoot.isDirectory) return null
 
         // Recorrer cada user-id -> profile-id -> buscar title-id
@@ -157,7 +157,7 @@ class SwitchSaveHandler : SaveHandler {
     }
 
     companion object {
-        const val DEFAULT_SAVES_PATH = "/storage/emulated/0/Android/data/dev.eden.eden_emulator/files"
+        const val DEFAULT_SAVES_PATH = "/storage/emulated/0/Android/data/dev.eden.eden_emulator/files/nand/user/save"
         private const val DEFAULT_USER_ID = "0000000000000000"
         private const val DEFAULT_PROFILE_ID = "0000000000000001"
     }

@@ -78,6 +78,10 @@ fun PlatformsScreen() {
         initial = es.davidrg.rommsync.data.local.ServerConfig("", "", "", 2)
     )
 
+    val retroArchBasePath by container.settingsRepository.retroArchBasePath.collectAsState(
+        initial = es.davidrg.rommsync.data.local.SettingsDataStore.DEFAULT_RETROARCH_PATH,
+    )
+
     val allVisible = platforms.isNotEmpty() && platforms.all { it.visible }
 
     LaunchedEffect(settings.isConfigured) {
@@ -191,6 +195,7 @@ fun PlatformsScreen() {
                 items(platforms, key = { it.id }) { platform ->
                     PlatformCard(
                         platform = platform,
+                        retroArchBasePath = retroArchBasePath,
                         onToggle = { viewModel.togglePlatformVisibility(it) },
                         onEmulatorChange = { id, emu -> viewModel.updatePlatformEmulator(id, emu) },
                         onSavesPathChange = { id, path -> viewModel.updatePlatformSavesPath(id, path) },
@@ -204,6 +209,7 @@ fun PlatformsScreen() {
 @Composable
 private fun PlatformCard(
     platform: Platform,
+    retroArchBasePath: String,
     onToggle: (Platform) -> Unit,
     onEmulatorChange: (Int, String?) -> Unit,
     onSavesPathChange: (Int, String?) -> Unit,
@@ -216,6 +222,13 @@ private fun PlatformCard(
         es.davidrg.rommsync.data.sync.platform.SaveHandlerRegistry.getDefaultEmulator(platform.slug)
     }
     val currentEmulator = platform.emulatorId ?: defaultEmulator.id
+    val defaultSavesPath = remember(currentEmulator, platform.slug, retroArchBasePath) {
+        es.davidrg.rommsync.data.sync.platform.SaveHandlerRegistry.getDefaultSavesPath(
+            emulatorId = currentEmulator,
+            platformSlug = platform.slug,
+            retroArchBase = retroArchBasePath,
+        )
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -335,7 +348,11 @@ private fun PlatformCard(
                         pathOverride = it
                         onSavesPathChange(platform.id, it.ifBlank { null })
                     },
-                    label = { Text("Ruta de saves (vacío = por defecto)") },
+                    label = { Text("Ruta de saves") },
+                    placeholder = { Text(defaultSavesPath, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    supportingText = {
+                        Text("Por defecto: $defaultSavesPath")
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),

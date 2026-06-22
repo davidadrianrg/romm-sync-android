@@ -78,14 +78,22 @@ object SaveHandlerRegistry {
     }
 
     /**
-     * Devuelve la ruta de saves por defecto para un emulador dado.
+     * Devuelve la ruta de saves por defecto para un emulador y plataforma.
+     *
+     * La plataforma es necesaria porque algunos emuladores (Dolphin) usan
+     * rutas distintas segun la plataforma: GameCube guarda en `.../files/GC`
+     * mientras que Wii guarda en `.../files/Wii/title`.
      */
-    fun getDefaultSavesPath(emulatorId: String, retroArchBase: String): String {
+    fun getDefaultSavesPath(emulatorId: String, platformSlug: String, retroArchBase: String): String {
         return when (emulatorId) {
             EmulatorId.MELONDS.id -> MelonDsSaveHandler.DEFAULT_SAVES_PATH
             EmulatorId.PPSSPP.id -> PpssppSaveHandler.DEFAULT_SAVES_PATH
             EmulatorId.AETHERSX2.id -> Ps2SaveHandler.DEFAULT_SAVES_PATH
-            EmulatorId.DOLPHIN.id -> DolphinSaveHandler.DEFAULT_SAVES_PATH
+            EmulatorId.DOLPHIN.id -> if (platformSlug.lowercase() in DolphinSaveHandler.GC_SLUGS) {
+                DolphinSaveHandler.DEFAULT_GC_SAVES_PATH
+            } else {
+                DolphinSaveHandler.DEFAULT_WII_SAVES_PATH
+            }
             EmulatorId.EDEN.id -> SwitchSaveHandler.DEFAULT_SAVES_PATH
             else -> retroArchBase
         }
