@@ -14,7 +14,7 @@ import java.util.zip.ZipOutputStream
  *
  * Estructura esperada:
  * ```
- * {ppssppBase}/PSP/SAVEDATA/{discId}*/
+ * {ppssppBase}/PSP/SAVEDATA/{discId}<...>/
  * ```
  *
  * Cada juego genera N carpetas con un prefijo de disc-id (9 caracteres,
