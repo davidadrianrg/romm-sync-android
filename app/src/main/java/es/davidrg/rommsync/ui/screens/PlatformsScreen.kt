@@ -1,7 +1,5 @@
 package es.davidrg.rommsync.ui.screens
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -340,18 +338,8 @@ private fun PlatformCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Override de ruta de saves mediante selector de carpetas
-                val folderPicker = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.OpenDocumentTree(),
-                ) { uri ->
-                    if (uri != null) {
-                        val path = es.davidrg.rommsync.util.treeUriToPath(uri)
-                        if (path != null) {
-                            onSavesPathChange(platform.id, path)
-                        }
-                    }
-                }
-
+                // Override de ruta de saves mediante explorador de carpetas propio
+                var showFolderPicker by remember { mutableStateOf(false) }
                 val hasOverride = !platform.savesPathOverride.isNullOrBlank()
                 val displayedPath = platform.savesPathOverride?.takeIf { it.isNotBlank() }
                     ?: defaultSavesPath
@@ -380,7 +368,7 @@ private fun PlatformCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     FilledTonalButton(
-                        onClick = { folderPicker.launch(null) },
+                        onClick = { showFolderPicker = true },
                         modifier = Modifier.weight(1f),
                     ) {
                         Icon(
@@ -398,6 +386,17 @@ private fun PlatformCard(
                             Text("Restablecer")
                         }
                     }
+                }
+
+                if (showFolderPicker) {
+                    es.davidrg.rommsync.ui.components.FolderPickerDialog(
+                        initialPath = displayedPath,
+                        onDismiss = { showFolderPicker = false },
+                        onSelect = { selected ->
+                            onSavesPathChange(platform.id, selected)
+                            showFolderPicker = false
+                        },
+                    )
                 }
             }
         }
