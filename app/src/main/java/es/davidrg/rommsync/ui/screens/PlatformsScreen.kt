@@ -1,5 +1,7 @@
 package es.davidrg.rommsync.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Deselect
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.outlined.Storage
@@ -31,7 +34,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -338,26 +340,65 @@ private fun PlatformCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Override de ruta de saves
-                var pathOverride by remember(platform.savesPathOverride) {
-                    mutableStateOf(platform.savesPathOverride ?: "")
+                // Override de ruta de saves mediante selector de carpetas
+                val folderPicker = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.OpenDocumentTree(),
+                ) { uri ->
+                    if (uri != null) {
+                        val path = es.davidrg.rommsync.util.treeUriToPath(uri)
+                        if (path != null) {
+                            onSavesPathChange(platform.id, path)
+                        }
+                    }
                 }
-                OutlinedTextField(
-                    value = pathOverride,
-                    onValueChange = {
-                        pathOverride = it
-                        onSavesPathChange(platform.id, it.ifBlank { null })
-                    },
-                    label = { Text("Ruta de saves") },
-                    placeholder = { Text(defaultSavesPath, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    supportingText = {
-                        Text("Por defecto: $defaultSavesPath")
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    textStyle = MaterialTheme.typography.bodySmall,
+
+                val hasOverride = !platform.savesPathOverride.isNullOrBlank()
+                val displayedPath = platform.savesPathOverride?.takeIf { it.isNotBlank() }
+                    ?: defaultSavesPath
+
+                Text(
+                    "Ruta de saves",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    displayedPath,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    if (hasOverride) "Ruta personalizada" else "Ruta por defecto",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilledTonalButton(
+                        onClick = { folderPicker.launch(null) },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            Icons.Filled.Folder,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.size(6.dp))
+                        Text("Seleccionar carpeta")
+                    }
+                    if (hasOverride) {
+                        TextButton(
+                            onClick = { onSavesPathChange(platform.id, null) },
+                        ) {
+                            Text("Restablecer")
+                        }
+                    }
+                }
             }
         }
     }

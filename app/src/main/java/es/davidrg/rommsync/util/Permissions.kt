@@ -71,3 +71,34 @@ fun hasNotificationPermission(context: android.content.Context): Boolean {
         true
     }
 }
+
+/**
+ * Convierte un tree-URI del Storage Access Framework (devuelto por
+ * [ActivityResultContracts.OpenDocumentTree]) en una ruta absoluta de
+ * filesystem utilizable con [java.io.File].
+ *
+ * La app usa MANAGE_EXTERNAL_STORAGE, por lo que puede operar directamente
+ * sobre rutas absolutas. El document-id de un tree-URI tiene el formato
+ * `"{volumen}:{ruta relativa}"` (p.ej. `"primary:ROMs/saves"`).
+ *
+ * - Volumen `primary` -> `/storage/emulated/0/{ruta}`.
+ * - Otros volúmenes (tarjeta SD) -> `/storage/{volumen}/{ruta}`.
+ *
+ * Devuelve null si el URI no se puede interpretar.
+ */
+fun treeUriToPath(uri: android.net.Uri): String? {
+    return runCatching {
+        val docId = android.provider.DocumentsContract.getTreeDocumentId(uri)
+        val split = docId.split(":", limit = 2)
+        val volume = split.getOrNull(0).orEmpty()
+        val relative = split.getOrNull(1).orEmpty()
+
+        val base = if (volume.equals("primary", ignoreCase = true)) {
+            "/storage/emulated/0"
+        } else {
+            "/storage/$volume"
+        }
+
+        if (relative.isEmpty()) base else "$base/$relative"
+    }.getOrNull()
+}

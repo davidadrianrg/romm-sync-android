@@ -17,6 +17,8 @@ object SaveHandlerRegistry {
     private val ps2Handler = Ps2SaveHandler()
     private val dolphinHandler = DolphinSaveHandler()
     private val switchHandler = SwitchSaveHandler()
+    private val n3dsHandler = N3dsSaveHandler()
+    private val cemuHandler = CemuSaveHandler()
 
     /**
      * Emuladores soportados con sus IDs para configuración por plataforma.
@@ -28,6 +30,8 @@ object SaveHandlerRegistry {
         AETHERSX2("aethersx2", "AetherSX2/NetherSX2"),
         DOLPHIN("dolphin", "Dolphin"),
         EDEN("eden", "Eden"),
+        AZAHAR("azahar", "Azahar"),
+        CEMU("cemu", "Cemu"),
     }
 
     /**
@@ -41,6 +45,8 @@ object SaveHandlerRegistry {
             "ps2" -> listOf(EmulatorId.AETHERSX2, EmulatorId.RETROARCH)
             "gc", "gamecube", "ngc" -> listOf(EmulatorId.DOLPHIN, EmulatorId.RETROARCH)
             "wii" -> listOf(EmulatorId.DOLPHIN, EmulatorId.RETROARCH)
+            in N3DS_SLUGS -> listOf(EmulatorId.AZAHAR, EmulatorId.RETROARCH)
+            in WIIU_SLUGS -> listOf(EmulatorId.CEMU)
             "switch" -> listOf(EmulatorId.EDEN)
             else -> listOf(EmulatorId.RETROARCH)
         }
@@ -55,6 +61,8 @@ object SaveHandlerRegistry {
             "psp" -> EmulatorId.PPSSPP
             "ps2" -> EmulatorId.AETHERSX2
             "gc", "gamecube", "ngc", "wii" -> EmulatorId.DOLPHIN
+            in N3DS_SLUGS -> EmulatorId.AZAHAR
+            in WIIU_SLUGS -> EmulatorId.CEMU
             "switch" -> EmulatorId.EDEN
             else -> EmulatorId.RETROARCH
         }
@@ -72,6 +80,8 @@ object SaveHandlerRegistry {
             EmulatorId.AETHERSX2.id -> ps2Handler
             EmulatorId.DOLPHIN.id -> dolphinHandler
             EmulatorId.EDEN.id -> switchHandler
+            EmulatorId.AZAHAR.id -> n3dsHandler
+            EmulatorId.CEMU.id -> cemuHandler
             EmulatorId.RETROARCH.id -> retroArchHandler
             else -> retroArchHandler
         }
@@ -95,7 +105,15 @@ object SaveHandlerRegistry {
                 DolphinSaveHandler.DEFAULT_WII_SAVES_PATH
             }
             EmulatorId.EDEN.id -> SwitchSaveHandler.DEFAULT_SAVES_PATH
+            EmulatorId.AZAHAR.id -> N3dsSaveHandler.DEFAULT_SAVES_PATH
+            EmulatorId.CEMU.id -> CemuSaveHandler.DEFAULT_SAVES_PATH
             else -> retroArchBase
         }
     }
+
+    /** Slugs de plataforma (ES-DE / RomM) que corresponden a Nintendo 3DS. */
+    private val N3DS_SLUGS = setOf("3ds", "n3ds", "nintendo-3ds", "nintendo_3ds")
+
+    /** Slugs de plataforma (ES-DE / RomM) que corresponden a Wii U. */
+    private val WIIU_SLUGS = setOf("wiiu", "wii-u", "wii_u", "nintendo-wii-u")
 }
