@@ -20,4 +20,9 @@ class SettingsRepository(private val dataStore: SettingsDataStore) {
 
     val retroArchBasePath: Flow<String> = dataStore.retroArchBasePath
     val saveSyncEnabled: Flow<Boolean> = dataStore.saveSyncEnabled
+    val lastSyncTimestamp: Flow<Long> = dataStore.lastSyncTimestamp
+    val lastSyncSummary: Flow<String> = dataStore.lastSyncSummary
+
+    suspend fun setLastSync(timestamp: Long, summary: String) =
+        dataStore.setLastSync(timestamp, summary)
 }

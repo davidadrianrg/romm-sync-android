@@ -32,6 +32,7 @@ import es.davidrg.rommsync.ui.screens.ConfigScreen
 import es.davidrg.rommsync.ui.screens.DownloadQueueScreen
 import es.davidrg.rommsync.ui.screens.LibraryScreen
 import es.davidrg.rommsync.ui.screens.PlatformsScreen
+import es.davidrg.rommsync.ui.screens.SyncScreen
 import es.davidrg.rommsync.util.hasAllFilesAccess
 
 @Composable
@@ -101,15 +102,17 @@ fun RomMSyncApp() {
             composable(Screen.Library.route) { LibraryScreen() }
             composable(Screen.Platforms.route) { PlatformsScreen() }
             composable(Screen.Downloads.route) { DownloadQueueScreen() }
+            composable(Screen.Sync.route) { SyncScreen() }
             composable(Screen.Config.route) { ConfigScreen() }
         }
     }
 }
 
-// Order: Library (home) → Platforms → Downloads → Config (last)
+// Order: Library (home) → Platforms → Downloads → Sync → Config
 private val bottomNavItems = listOf(
     Screen.Library,
     Screen.Platforms,
     Screen.Downloads,
+    Screen.Sync,
     Screen.Config,
 )

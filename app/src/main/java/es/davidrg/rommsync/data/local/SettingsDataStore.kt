@@ -6,6 +6,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -41,6 +42,8 @@ class SettingsDataStore(private val context: Context) {
         val RETROARCH_BASE_PATH = stringPreferencesKey("retroarch_base_path")
         val DEVICE_ID = intPreferencesKey("sync_device_id")
         val SAVE_SYNC_ENABLED = stringPreferencesKey("save_sync_enabled")
+        val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
+        val LAST_SYNC_SUMMARY = stringPreferencesKey("last_sync_summary")
 
         /**
          * Legacy DataStore key where the API key used to live (plaintext).
@@ -118,6 +121,12 @@ class SettingsDataStore(private val context: Context) {
     val saveSyncEnabled: Flow<Boolean> = context.dataStore.data.map {
         (it[SAVE_SYNC_ENABLED] ?: "false") == "true"
     }
+    val lastSyncTimestamp: Flow<Long> = context.dataStore.data.map {
+        it[LAST_SYNC_TIMESTAMP] ?: 0L
+    }
+    val lastSyncSummary: Flow<String> = context.dataStore.data.map {
+        it[LAST_SYNC_SUMMARY] ?: ""
+    }
 
     /** Combined settings snapshot */
     val settings: Flow<ServerConfig> = combine(
@@ -161,6 +170,13 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setSyncDeviceId(id: Int) {
         context.dataStore.edit { it[DEVICE_ID] = id }
+    }
+
+    suspend fun setLastSync(timestamp: Long, summary: String) {
+        context.dataStore.edit {
+            it[LAST_SYNC_TIMESTAMP] = timestamp
+            it[LAST_SYNC_SUMMARY] = summary
+        }
     }
 
     suspend fun setSaveSyncEnabled(enabled: Boolean) {

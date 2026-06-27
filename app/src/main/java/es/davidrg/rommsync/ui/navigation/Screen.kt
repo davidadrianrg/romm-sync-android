@@ -5,10 +5,12 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.ui.graphics.vector.ImageVector
 
 enum class Screen(
@@ -40,5 +42,11 @@ enum class Screen(
         title = "Descargas",
         icon = Icons.Outlined.Download,
         selectedIcon = Icons.Filled.Download,
+    ),
+    Sync(
+        route = "sync",
+        title = "Sync",
+        icon = Icons.Outlined.Sync,
+        selectedIcon = Icons.Filled.Sync,
     ),
 }
