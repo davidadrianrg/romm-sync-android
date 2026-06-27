@@ -2,6 +2,7 @@ package es.davidrg.rommsync.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,11 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -83,6 +89,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
+import coil.AsyncImagePainter
 import es.davidrg.rommsync.RomMSyncApplication
 import es.davidrg.rommsync.domain.model.DownloadStatus
 import es.davidrg.rommsync.domain.model.Platform
@@ -197,14 +206,14 @@ fun LibraryScreen() {
     val minCardSize = if (isLandscape) 110.dp else 140.dp
 
     // ── Infinite scroll state ──────────────────────────────────────────
-    val gridState = rememberLazyGridState()
+    val gridState = rememberLazyStaggeredGridState()
     val isLoadingMore by viewModel.isLoadingMore.collectAsState()
     val hasMore by viewModel.hasMore.collectAsState()
 
     // Detect when user scrolls near the bottom → trigger loadMore
     val reachedBottom by remember {
         derivedStateOf {
-            val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.maxOfOrNull { it.index } ?: -1
             val totalItems = filteredRoms.size
             totalItems > 0 && lastVisibleIndex >= totalItems - 8
         }
@@ -443,12 +452,12 @@ fun LibraryScreen() {
                 },
                 modifier = Modifier.fillMaxSize(),
             ) {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = minCardSize),
+                LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Adaptive(minSize = minCardSize),
                     state = gridState,
                     modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalItemSpacing = 8.dp,
+                    verticalItemSpacing = 8.dp,
                     contentPadding = PaddingValues(vertical = 8.dp),
                 ) {
                     items(filteredRoms, key = { it.rom.id }) { romStatus ->
@@ -468,7 +477,7 @@ fun LibraryScreen() {
                     }
                     // Loading more footer
                     if (isLoadingMore) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
+                        item(span = StaggeredGridItemSpan.FullLine) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -603,10 +612,35 @@ private fun RomCard(
     onDownload: (RomWithStatus) -> Unit,
     onLongPress: (RomWithStatus) -> Unit,
 ) {
+    val context = LocalContext.current
+    val coverUrl = romWithStatus.rom.coverUrlLarge ?: romWithStatus.rom.coverUrlSmall
+    val painter = rememberAsyncImagePainter(
+        model = ImageRequest.Builder(context)
+            .data(coverUrl)
+            .crossfade(true)
+            .build(),
+    )
+    val painterState = painter.state
+
+    // Calcular aspect ratio real de la carátula; fallback a 0.70 mientras carga
+    val aspectRatio = when (painterState) {
+        is AsyncImagePainter.State.Success -> {
+            val size = painter.intrinsicSize
+            if (size != androidx.compose.ui.unit.IntSize.Unspecified
+                && size.width > 0 && size.height > 0
+            ) {
+                size.width.toFloat() / size.height.toFloat()
+            } else {
+                DEFAULT_COVER_RATIO
+            }
+        }
+        else -> DEFAULT_COVER_RATIO
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(0.70f)
+            .aspectRatio(aspectRatio)
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .combinedClickable(
@@ -614,8 +648,8 @@ private fun RomCard(
                 onLongClick = { onLongPress(romWithStatus) },
             ),
     ) {
-        AsyncImage(
-            model = romWithStatus.rom.coverUrlLarge ?: romWithStatus.rom.coverUrlSmall,
+        Image(
+            painter = painter,
             contentDescription = romWithStatus.rom.name,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
@@ -704,6 +738,9 @@ private fun RomCard(
         }
     }
 }
+
+/** Aspect ratio por defecto mientras la carátula carga o si falla. */
+private const val DEFAULT_COVER_RATIO = 0.70f
 
 // ── Bottom sheet: game detail ──────────────────────────────────────────
 @Composable

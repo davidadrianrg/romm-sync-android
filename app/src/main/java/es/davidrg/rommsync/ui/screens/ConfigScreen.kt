@@ -55,6 +55,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import es.davidrg.rommsync.RomMSyncApplication
+import es.davidrg.rommsync.ui.components.FolderPickerDialog
 import es.davidrg.rommsync.ui.viewmodel.ConfigViewModel
 import es.davidrg.rommsync.util.hasAllFilesAccess
 import es.davidrg.rommsync.util.rememberNotificationPermissionState
@@ -78,6 +79,10 @@ fun ConfigScreen() {
     var apiKey by remember { mutableStateOf("") }
     var apiKeyVisible by remember { mutableStateOf(false) }
     var retroArchPath by remember { mutableStateOf("") }
+
+    // ── Folder picker dialog state ───────────────────────────────────────
+    var showRomsPicker by remember { mutableStateOf(false) }
+    var showRetroArchPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(settings.serverUrl, settings.apiKey) {
         if (serverUrl.isEmpty() && settings.serverUrl.isNotEmpty()) serverUrl = settings.serverUrl
@@ -208,7 +213,9 @@ fun ConfigScreen() {
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     trailingIcon = {
-                        Icon(Icons.Filled.Folder, contentDescription = "Directorio")
+                        IconButton(onClick = { showRomsPicker = true }) {
+                            Icon(Icons.Filled.Folder, contentDescription = "Explorar carpetas")
+                        }
                     },
                 )
             }
@@ -245,7 +252,9 @@ fun ConfigScreen() {
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     trailingIcon = {
-                        Icon(Icons.Filled.Folder, contentDescription = "Directorio")
+                        IconButton(onClick = { showRetroArchPicker = true }) {
+                            Icon(Icons.Filled.Folder, contentDescription = "Explorar carpetas")
+                        }
                     },
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -311,6 +320,33 @@ fun ConfigScreen() {
                 }
             }
         }
+    }
+
+    // ── Folder picker dialogs ───────────────────────────────────────────
+    if (showRomsPicker) {
+        FolderPickerDialog(
+            initialPath = settings.romsRootPath.ifBlank {
+                es.davidrg.rommsync.data.local.SettingsDataStore.DEFAULT_ROMS_PATH
+            },
+            onDismiss = { showRomsPicker = false },
+            onSelect = { path ->
+                viewModel.setRomsRootPath(path)
+                showRomsPicker = false
+            },
+        )
+    }
+    if (showRetroArchPicker) {
+        FolderPickerDialog(
+            initialPath = retroArchBasePath.ifBlank {
+                es.davidrg.rommsync.data.local.SettingsDataStore.DEFAULT_RETROARCH_PATH
+            },
+            onDismiss = { showRetroArchPicker = false },
+            onSelect = { path ->
+                viewModel.setRetroArchBasePath(path)
+                retroArchPath = path
+                showRetroArchPicker = false
+            },
+        )
     }
 }
 
