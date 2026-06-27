@@ -425,11 +425,38 @@ private fun PlatformCard(
                 val isExporting = exportState is es.davidrg.rommsync.data.metadata.ExportState.Running ||
                     exportState is es.davidrg.rommsync.data.metadata.ExportState.Pending
 
+                // Toggle: incluir RetroHRAI además de ES-DE
+                var exportRetroHrai by remember { mutableStateOf(false) }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Switch(
+                        checked = exportRetroHrai,
+                        onCheckedChange = { exportRetroHrai = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary,
+                            uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        ),
+                    )
+                    Spacer(modifier = Modifier.size(10.dp))
+                    Text(
+                        "Exportar también a RetroHRAI",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+
                 FilledTonalButton(
                     onClick = {
                         container.metadataExportManager.triggerExport(
                             platformId = platform.id,
                             platformSlug = platform.slug,
+                            retroHrai = exportRetroHrai,
                         )
                     },
                     enabled = !isExporting,

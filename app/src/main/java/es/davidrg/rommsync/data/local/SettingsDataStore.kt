@@ -45,6 +45,7 @@ class SettingsDataStore(private val context: Context) {
         val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
         val LAST_SYNC_SUMMARY = stringPreferencesKey("last_sync_summary")
         val ESDE_DATA_DIR = stringPreferencesKey("esde_data_dir")
+        val RETROHRAI_MEDIA_PATH = stringPreferencesKey("retrohrai_media_path")
 
         /**
          * Legacy DataStore key where the API key used to live (plaintext).
@@ -61,6 +62,7 @@ class SettingsDataStore(private val context: Context) {
         const val DEFAULT_MAX_DOWNLOADS = 2
         const val DEFAULT_RETROARCH_PATH = "/storage/emulated/0/RetroArch"
         const val DEFAULT_ESDE_DATA_DIR = "/storage/emulated/0/ES-DE"
+        const val DEFAULT_RETROHRAI_MEDIA_PATH = "/storage/emulated/0/RetroHrai/media"
     }
 
     /**
@@ -132,6 +134,9 @@ class SettingsDataStore(private val context: Context) {
     val esdeDataDir: Flow<String> = context.dataStore.data.map {
         it[ESDE_DATA_DIR] ?: DEFAULT_ESDE_DATA_DIR
     }
+    val retroHraiMediaPath: Flow<String> = context.dataStore.data.map {
+        it[RETROHRAI_MEDIA_PATH] ?: DEFAULT_RETROHRAI_MEDIA_PATH
+    }
 
     /** Combined settings snapshot */
     val settings: Flow<ServerConfig> = combine(
@@ -190,6 +195,10 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setEsdeDataDir(path: String) {
         context.dataStore.edit { it[ESDE_DATA_DIR] = path.trimEnd('/') }
+    }
+
+    suspend fun setRetroHraiMediaPath(path: String) {
+        context.dataStore.edit { it[RETROHRAI_MEDIA_PATH] = path.trimEnd('/') }
     }
 
     // ── Blocking readers (for WorkManager / non-coroutine callers) ────
@@ -255,6 +264,12 @@ class SettingsDataStore(private val context: Context) {
         return runCatching {
             runBlocking { context.dataStore.data.first()[ESDE_DATA_DIR] ?: DEFAULT_ESDE_DATA_DIR }
         }.getOrDefault(DEFAULT_ESDE_DATA_DIR)
+    }
+
+    fun getRetroHraiMediaPathBlocking(): String {
+        return runCatching {
+            runBlocking { context.dataStore.data.first()[RETROHRAI_MEDIA_PATH] ?: DEFAULT_RETROHRAI_MEDIA_PATH }
+        }.getOrDefault(DEFAULT_RETROHRAI_MEDIA_PATH)
     }
 }
 

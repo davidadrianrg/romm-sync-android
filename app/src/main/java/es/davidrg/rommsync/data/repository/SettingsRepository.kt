@@ -23,8 +23,10 @@ class SettingsRepository(private val dataStore: SettingsDataStore) {
     val lastSyncTimestamp: Flow<Long> = dataStore.lastSyncTimestamp
     val lastSyncSummary: Flow<String> = dataStore.lastSyncSummary
     val esdeDataDir: Flow<String> = dataStore.esdeDataDir
+    val retroHraiMediaPath: Flow<String> = dataStore.retroHraiMediaPath
 
     suspend fun setLastSync(timestamp: Long, summary: String) =
         dataStore.setLastSync(timestamp, summary)
     suspend fun setEsdeDataDir(path: String) = dataStore.setEsdeDataDir(path)
+    suspend fun setRetroHraiMediaPath(path: String) = dataStore.setRetroHraiMediaPath(path)
 }

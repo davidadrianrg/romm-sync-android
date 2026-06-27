@@ -54,6 +54,7 @@ class MetadataExportWorker(
         val apiKey = dataStore.getApiKeyBlocking()
         val romsRootPath = dataStore.getRomsRootPathBlocking()
         val esdeDataDir = dataStore.getEsdeDataDirBlocking()
+        val retroHraiMediaPath = dataStore.getRetroHraiMediaPathBlocking()
 
         if (apiKey.isEmpty() || serverUrl.isEmpty()) {
             return@withContext Result.failure()
@@ -65,6 +66,7 @@ class MetadataExportWorker(
         val exportVideos = inputData.getBoolean(KEY_VIDEOS, true)
         val exportManuals = inputData.getBoolean(KEY_MANUALS, true)
         val exportGamelist = inputData.getBoolean(KEY_GAMELIST, true)
+        val exportRetroHrai = inputData.getBoolean(KEY_RETROHRAI, false)
 
         createNotificationChannel()
         try {
@@ -109,42 +111,70 @@ class MetadataExportWorker(
                     .replace(Regex("[^a-zA-Z0-9._ -]"), "")
                     .trim()
 
-                // Descargar media
+                // Nombre limpio del juego para RetroHRAI
+                val gameName = rom.name
+                    .replace(Regex("[^a-zA-Z0-9._ -]"), "")
+                    .trim()
+
+                // Descargar cover a ES-DE + RetroHRAI
                 if (exportCovers && rom.coverUrlLarge != null) {
-                    val ok = downloadFile(
+                    val esdeFile = downloadToFile(
                         httpClient, apiKey, rom.coverUrlLarge,
                         getMediaDir(romsRootPath, platformSlug, "covers"),
                         "$mediaBaseName.jpg",
                     )
-                    if (ok) mediaDownloaded++ else mediaSkipped++
+                    if (esdeFile != null) mediaDownloaded++ else mediaSkipped++
+
+                    // Copiar a RetroHRAI con naming {gameName}_cover_0.jpg
+                    if (exportRetroHrai && esdeFile != null) {
+                        copyToRetroHrai(
+                            esdeFile, retroHraiMediaPath, platformSlug, "covers",
+                            "${gameName}_cover_0.jpg",
+                        )
+                    }
                 }
 
+                // Descargar screenshots a ES-DE + RetroHRAI
                 if (exportScreenshots && rom.screenshots.isNotEmpty()) {
                     val firstScreenshot = rom.screenshots.first()
-                    val ok = downloadFile(
+                    val esdeFile = downloadToFile(
                         httpClient, apiKey, firstScreenshot,
                         getMediaDir(romsRootPath, platformSlug, "screenshots"),
                         "$mediaBaseName.jpg",
                     )
-                    if (ok) mediaDownloaded++ else mediaSkipped++
+                    if (esdeFile != null) mediaDownloaded++ else mediaSkipped++
+
+                    if (exportRetroHrai && esdeFile != null) {
+                        // Screenshot_0 + fanart_0 (primera screenshot como fanart)
+                        copyToRetroHrai(
+                            esdeFile, retroHraiMediaPath, platformSlug, "screenshots",
+                            "${gameName}_screenshot_0.jpg",
+                        )
+                        copyToRetroHrai(
+                            esdeFile, retroHraiMediaPath, platformSlug, "fanart",
+                            "${gameName}_fanart_0.jpg",
+                        )
+                    }
                 }
 
+                // Descargar videos a ES-DE
                 if (exportVideos && rom.videoPath != null) {
-                    val ok = downloadFile(
+                    val esdeFile = downloadToFile(
                         httpClient, apiKey, rom.videoPath,
                         getMediaDir(romsRootPath, platformSlug, "videos"),
                         "$mediaBaseName.mp4",
                     )
-                    if (ok) mediaDownloaded++ else mediaSkipped++
+                    if (esdeFile != null) mediaDownloaded++ else mediaSkipped++
                 }
 
+                // Descargar manuals a ES-DE
                 if (exportManuals && rom.manualPath != null) {
-                    val ok = downloadFile(
+                    val esdeFile = downloadToFile(
                         httpClient, apiKey, rom.manualPath,
                         getMediaDir(romsRootPath, platformSlug, "manuals"),
                         "$mediaBaseName.pdf",
                     )
-                    if (ok) mediaDownloaded++ else mediaSkipped++
+                    if (esdeFile != null) mediaDownloaded++ else mediaSkipped++
                 }
 
                 // Crear entry para gamelist
@@ -186,16 +216,17 @@ class MetadataExportWorker(
     /**
      * Descarga un fichero desde una URL con autenticación Bearer.
      * Omite la descarga si el fichero ya existe.
+     * Devuelve el File descargado, o null si falló/skip.
      */
-    private fun downloadFile(
+    private fun downloadToFile(
         client: OkHttpClient,
         apiKey: String,
         url: String,
         targetDir: File,
         fileName: String,
-    ): Boolean {
+    ): File? {
         val targetFile = File(targetDir, fileName)
-        if (targetFile.exists()) return false // skip si ya existe
+        if (targetFile.exists()) return targetFile // ya existe, lo reutilizamos
 
         targetDir.mkdirs()
         return try {
@@ -207,19 +238,42 @@ class MetadataExportWorker(
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     Log.w(TAG, "Failed to download $url: HTTP ${response.code}")
-                    return false
+                    return null
                 }
                 response.body?.byteStream()?.use { input ->
                     FileOutputStream(targetFile).use { output ->
                         input.copyTo(output)
                     }
-                } ?: return false
+                } ?: return null
             }
-            true
+            targetFile
         } catch (e: IOException) {
             Log.w(TAG, "IO error downloading $fileName", e)
             if (targetFile.exists()) targetFile.delete()
-            false
+            null
+        }
+    }
+
+    /**
+     * Copia un archivo ya descargado a la estructura de RetroHRAI.
+     * Estructura: {retroHraiMediaPath}/{slug}/{type}/{fileName}
+     * Omite si el destino ya existe.
+     */
+    private fun copyToRetroHrai(
+        source: File,
+        retroHraiMediaPath: String,
+        platformSlug: String,
+        type: String,
+        fileName: String,
+    ) {
+        val targetDir = File("$retroHraiMediaPath/$platformSlug/$type")
+        targetDir.mkdirs()
+        val target = File(targetDir, fileName)
+        if (target.exists()) return
+        try {
+            source.copyTo(target, overwrite = false)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to copy to RetroHRAI: $fileName", e)
         }
     }
 
@@ -312,6 +366,7 @@ class MetadataExportWorker(
         const val KEY_VIDEOS = "export_videos"
         const val KEY_MANUALS = "export_manuals"
         const val KEY_GAMELIST = "export_gamelist"
+        const val KEY_RETROHRAI = "export_retrohrai"
 
         const val KEY_MEDIA_DOWNLOADED = "media_downloaded"
         const val KEY_MEDIA_SKIPPED = "media_skipped"

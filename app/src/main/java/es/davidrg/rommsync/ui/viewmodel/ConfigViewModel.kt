@@ -44,4 +44,8 @@ class ConfigViewModel(
     fun setEsdeDataPath(path: String) {
         viewModelScope.launch { settingsRepository.setEsdeDataDir(path) }
     }
+
+    fun setRetroHraiMediaPath(path: String) {
+        viewModelScope.launch { settingsRepository.setRetroHraiMediaPath(path) }
+    }
 }

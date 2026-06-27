@@ -84,6 +84,7 @@ fun ConfigScreen() {
     var showRomsPicker by remember { mutableStateOf(false) }
     var showRetroArchPicker by remember { mutableStateOf(false) }
     var showEsdePicker by remember { mutableStateOf(false) }
+    var showRetroHraiPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(settings.serverUrl, settings.apiKey) {
         if (serverUrl.isEmpty() && settings.serverUrl.isNotEmpty()) serverUrl = settings.serverUrl
@@ -103,6 +104,11 @@ fun ConfigScreen() {
     // Cargar ruta de datos de ES-DE
     val esdeDataDir by container.settingsRepository.esdeDataDir.collectAsState(
         initial = es.davidrg.rommsync.data.local.SettingsDataStore.DEFAULT_ESDE_DATA_DIR,
+    )
+
+    // Cargar ruta de media de RetroHRAI
+    val retroHraiMediaPath by container.settingsRepository.retroHraiMediaPath.collectAsState(
+        initial = es.davidrg.rommsync.data.local.SettingsDataStore.DEFAULT_RETROHRAI_MEDIA_PATH,
     )
 
     Scaffold(
@@ -254,6 +260,34 @@ fun ConfigScreen() {
                 )
             }
 
+            // ── RetroHRAI Media ──────────────────────────────────────────
+            SettingsSection(
+                icon = Icons.Outlined.Folder,
+                title = "Media de RetroHRAI",
+            ) {
+                OutlinedTextField(
+                    value = retroHraiMediaPath,
+                    onValueChange = { viewModel.setRetroHraiMediaPath(it) },
+                    label = { Text("Ruta base de media RetroHRAI") },
+                    placeholder = { Text("/storage/emulated/0/RetroHrai/media") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    trailingIcon = {
+                        IconButton(onClick = { showRetroHraiPicker = true }) {
+                            Icon(Icons.Filled.Folder, contentDescription = "Explorar carpetas")
+                        }
+                    },
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Los metadatos se escribirán como " +
+                        "{juego}_{tipo}_{n}.jpg en subcarpetas covers, fanart, logos, screenshots.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             // ── Descargas ───────────────────────────────────────────────
             SettingsSection(
                 icon = Icons.Outlined.DownloadForOffline,
@@ -391,6 +425,18 @@ fun ConfigScreen() {
             onSelect = { path ->
                 viewModel.setEsdeDataPath(path)
                 showEsdePicker = false
+            },
+        )
+    }
+    if (showRetroHraiPicker) {
+        FolderPickerDialog(
+            initialPath = retroHraiMediaPath.ifBlank {
+                es.davidrg.rommsync.data.local.SettingsDataStore.DEFAULT_RETROHRAI_MEDIA_PATH
+            },
+            onDismiss = { showRetroHraiPicker = false },
+            onSelect = { path ->
+                viewModel.setRetroHraiMediaPath(path)
+                showRetroHraiPicker = false
             },
         )
     }
