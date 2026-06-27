@@ -83,6 +83,7 @@ fun ConfigScreen() {
     // ── Folder picker dialog state ───────────────────────────────────────
     var showRomsPicker by remember { mutableStateOf(false) }
     var showRetroArchPicker by remember { mutableStateOf(false) }
+    var showEsdePicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(settings.serverUrl, settings.apiKey) {
         if (serverUrl.isEmpty() && settings.serverUrl.isNotEmpty()) serverUrl = settings.serverUrl
@@ -98,6 +99,11 @@ fun ConfigScreen() {
             retroArchPath = retroArchBasePath
         }
     }
+
+    // Cargar ruta de datos de ES-DE
+    val esdeDataDir by container.settingsRepository.esdeDataDir.collectAsState(
+        initial = es.davidrg.rommsync.data.local.SettingsDataStore.DEFAULT_ESDE_DATA_DIR,
+    )
 
     Scaffold(
         topBar = {
@@ -217,6 +223,34 @@ fun ConfigScreen() {
                             Icon(Icons.Filled.Folder, contentDescription = "Explorar carpetas")
                         }
                     },
+                )
+            }
+
+            // ── ES-DE Data Dir ───────────────────────────────────────────
+            SettingsSection(
+                icon = Icons.Outlined.Folder,
+                title = "Datos de ES-DE (gamelist)",
+            ) {
+                OutlinedTextField(
+                    value = esdeDataDir,
+                    onValueChange = { viewModel.setEsdeDataPath(it) },
+                    label = { Text("Directorio de datos ES-DE") },
+                    placeholder = { Text("/storage/emulated/0/ES-DE") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    trailingIcon = {
+                        IconButton(onClick = { showEsdePicker = true }) {
+                            Icon(Icons.Filled.Folder, contentDescription = "Explorar carpetas")
+                        }
+                    },
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Aquí es donde ES-DE guarda los gamelist.xml. " +
+                        "Los metadatos exportados se escribirán en esta carpeta.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -345,6 +379,18 @@ fun ConfigScreen() {
                 viewModel.setRetroArchBasePath(path)
                 retroArchPath = path
                 showRetroArchPicker = false
+            },
+        )
+    }
+    if (showEsdePicker) {
+        FolderPickerDialog(
+            initialPath = esdeDataDir.ifBlank {
+                es.davidrg.rommsync.data.local.SettingsDataStore.DEFAULT_ESDE_DATA_DIR
+            },
+            onDismiss = { showEsdePicker = false },
+            onSelect = { path ->
+                viewModel.setEsdeDataPath(path)
+                showEsdePicker = false
             },
         )
     }

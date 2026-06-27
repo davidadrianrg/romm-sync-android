@@ -40,4 +40,8 @@ class ConfigViewModel(
     fun setRetroArchBasePath(path: String) {
         viewModelScope.launch { settingsRepository.setRetroArchBasePath(path) }
     }
+
+    fun setEsdeDataPath(path: String) {
+        viewModelScope.launch { settingsRepository.setEsdeDataDir(path) }
+    }
 }

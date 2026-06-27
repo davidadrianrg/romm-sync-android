@@ -3,6 +3,19 @@ package es.davidrg.rommsync.data.remote.dto
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
+/**
+ * Metadata from IGDB scraper (subset relevant for gamelist.xml export).
+ */
+@JsonClass(generateAdapter = true)
+data class IgdbMetadataDto(
+    @Json(name = "total_rating") val totalRating: String? = null,
+    @Json(name = "first_release_date") val firstReleaseDate: Long? = null,
+    val genres: List<String> = emptyList(),
+    val companies: List<String> = emptyList(),
+    @Json(name = "game_modes") val gameModes: List<String> = emptyList(),
+    @Json(name = "player_count") val playerCount: String? = null,
+)
+
 @JsonClass(generateAdapter = true)
 data class RomFileDto(
     @Json(name = "file_name") val filename: String,
@@ -14,9 +27,9 @@ data class RomFileDto(
 
 @JsonClass(generateAdapter = true)
 data class RomDto(
-    @Json(name = "id") val id: Int,
+    val id: Int,
     @Json(name = "slug") val slug: String? = null,
-    @Json(name = "name") val name: String,
+    val name: String,
     @Json(name = "fs_name") val fileName: String,
     @Json(name = "fs_name_no_tags") val fileNameNoTags: String? = null,
     @Json(name = "fs_name_no_ext") val fileNameNoExt: String? = null,
@@ -28,15 +41,20 @@ data class RomDto(
     @Json(name = "path_cover_small") val pathCoverSmall: String? = null,
     @Json(name = "path_cover_large") val pathCoverLarge: String? = null,
     @Json(name = "url_cover") val urlCover: String? = null,
-    @Json(name = "summary") val summary: String? = null,
+    val summary: String? = null,
     @Json(name = "igdb_id") val igdbId: Int? = null,
-    @Json(name = "files") val files: List<RomFileDto> = emptyList(),
-    @Json(name = "multi") val isMulti: Boolean = false,
+    val files: List<RomFileDto> = emptyList(),
+    val multi: Boolean = false,
     @Json(name = "has_multiple_files") val hasMultipleFiles: Boolean = false,
-    @Json(name = "revision") val revision: String? = null,
-    @Json(name = "regions") val regions: List<String> = emptyList(),
-    @Json(name = "languages") val languages: List<String> = emptyList(),
-    @Json(name = "genres") val genres: List<String> = emptyList(),
+    val revision: String? = null,
+    val regions: List<String> = emptyList(),
+    val languages: List<String> = emptyList(),
+    val genres: List<String> = emptyList(),
+    // ── Media fields for ES-DE export ──────────────────────────────
+    @Json(name = "merged_screenshots") val mergedScreenshots: List<String> = emptyList(),
+    @Json(name = "path_video") val pathVideo: String? = null,
+    @Json(name = "path_manual") val pathManual: String? = null,
+    @Json(name = "igdb_metadata") val igdbMetadata: IgdbMetadataDto? = null,
 )
 
 /**

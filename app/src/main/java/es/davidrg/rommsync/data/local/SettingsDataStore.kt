@@ -44,6 +44,7 @@ class SettingsDataStore(private val context: Context) {
         val SAVE_SYNC_ENABLED = stringPreferencesKey("save_sync_enabled")
         val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
         val LAST_SYNC_SUMMARY = stringPreferencesKey("last_sync_summary")
+        val ESDE_DATA_DIR = stringPreferencesKey("esde_data_dir")
 
         /**
          * Legacy DataStore key where the API key used to live (plaintext).
@@ -59,6 +60,7 @@ class SettingsDataStore(private val context: Context) {
         const val DEFAULT_ROMS_PATH = "/storage/emulated/0/ROMs"
         const val DEFAULT_MAX_DOWNLOADS = 2
         const val DEFAULT_RETROARCH_PATH = "/storage/emulated/0/RetroArch"
+        const val DEFAULT_ESDE_DATA_DIR = "/storage/emulated/0/ES-DE"
     }
 
     /**
@@ -127,6 +129,9 @@ class SettingsDataStore(private val context: Context) {
     val lastSyncSummary: Flow<String> = context.dataStore.data.map {
         it[LAST_SYNC_SUMMARY] ?: ""
     }
+    val esdeDataDir: Flow<String> = context.dataStore.data.map {
+        it[ESDE_DATA_DIR] ?: DEFAULT_ESDE_DATA_DIR
+    }
 
     /** Combined settings snapshot */
     val settings: Flow<ServerConfig> = combine(
@@ -181,6 +186,10 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setSaveSyncEnabled(enabled: Boolean) {
         context.dataStore.edit { it[SAVE_SYNC_ENABLED] = if (enabled) "true" else "false" }
+    }
+
+    suspend fun setEsdeDataDir(path: String) {
+        context.dataStore.edit { it[ESDE_DATA_DIR] = path.trimEnd('/') }
     }
 
     // ── Blocking readers (for WorkManager / non-coroutine callers) ────
@@ -240,6 +249,12 @@ class SettingsDataStore(private val context: Context) {
         return runCatching {
             runBlocking { context.dataStore.data.first()[DEVICE_ID] }
         }.getOrNull()
+    }
+
+    fun getEsdeDataDirBlocking(): String {
+        return runCatching {
+            runBlocking { context.dataStore.data.first()[ESDE_DATA_DIR] ?: DEFAULT_ESDE_DATA_DIR }
+        }.getOrDefault(DEFAULT_ESDE_DATA_DIR)
     }
 }
 

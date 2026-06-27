@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -196,6 +197,7 @@ fun PlatformsScreen() {
                     PlatformCard(
                         platform = platform,
                         retroArchBasePath = retroArchBasePath,
+                        container = container,
                         onToggle = { viewModel.togglePlatformVisibility(it) },
                         onEmulatorChange = { id, emu -> viewModel.updatePlatformEmulator(id, emu) },
                         onSavesPathChange = { id, path -> viewModel.updatePlatformSavesPath(id, path) },
@@ -210,6 +212,7 @@ fun PlatformsScreen() {
 private fun PlatformCard(
     platform: Platform,
     retroArchBasePath: String,
+    container: es.davidrg.rommsync.data.AppContainer,
     onToggle: (Platform) -> Unit,
     onEmulatorChange: (Int, String?) -> Unit,
     onSavesPathChange: (Int, String?) -> Unit,
@@ -397,6 +400,77 @@ private fun PlatformCard(
                             showFolderPicker = false
                         },
                     )
+                }
+
+                // ── Exportar metadatos a ES-DE ──────────────────────────
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "Exportar a ES-DE",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Descarga carátulas, screenshots, vídeos y manuales de RomM " +
+                        "y actualiza el gamelist.xml de esta plataforma.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val exportState by container.metadataExportManager
+                    .observeExportState(platform.slug).collectAsState(
+                        initial = es.davidrg.rommsync.data.metadata.ExportState.Idle
+                    )
+                val isExporting = exportState is es.davidrg.rommsync.data.metadata.ExportState.Running ||
+                    exportState is es.davidrg.rommsync.data.metadata.ExportState.Pending
+
+                FilledTonalButton(
+                    onClick = {
+                        container.metadataExportManager.triggerExport(
+                            platformId = platform.id,
+                            platformSlug = platform.slug,
+                        )
+                    },
+                    enabled = !isExporting,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (isExporting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            Icons.Outlined.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text(if (isExporting) "Exportando..." else "Exportar metadatos")
+                }
+
+                // Feedback de resultado
+                when (exportState) {
+                    is es.davidrg.rommsync.data.metadata.ExportState.Success -> {
+                        val s = exportState as es.davidrg.rommsync.data.metadata.ExportState.Success
+                        Text(
+                            "✓ ${s.mediaDownloaded} archivos · ${s.entriesCount} juegos en gamelist",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                    is es.davidrg.rommsync.data.metadata.ExportState.Failed -> {
+                        Text(
+                            "Error en la exportación",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                    else -> {}
                 }
             }
         }

@@ -20,8 +20,26 @@ data class Rom(
     val genres: List<String> = emptyList(),
     val summary: String? = null,
     val fileNameNoTags: String? = null,
+    val fileNameNoExt: String? = null,
     val fileExtension: String? = null,
     val igdbId: Int? = null,
+    // ── Media fields for ES-DE export ──────────────────────────────
+    val screenshots: List<String> = emptyList(),
+    val videoPath: String? = null,
+    val manualPath: String? = null,
+    val igdbMetadata: IgdbMetadata? = null,
+)
+
+/**
+ * Subset of IGDB metadata used for gamelist.xml generation.
+ */
+data class IgdbMetadata(
+    val totalRating: Double? = null,
+    val firstReleaseDate: Long? = null,
+    val genres: List<String> = emptyList(),
+    val companies: List<String> = emptyList(),
+    val gameModes: List<String> = emptyList(),
+    val playerCount: String? = null,
 )
 
 data class RomFile(

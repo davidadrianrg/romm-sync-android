@@ -3,6 +3,7 @@ package es.davidrg.rommsync.data
 import android.content.Context
 import es.davidrg.rommsync.data.local.RomSyncDatabase
 import es.davidrg.rommsync.data.local.SettingsDataStore
+import es.davidrg.rommsync.data.metadata.MetadataExportManager
 import es.davidrg.rommsync.data.repository.RomRepository
 import es.davidrg.rommsync.data.repository.SettingsRepository
 import es.davidrg.rommsync.data.sync.SaveSyncManager
@@ -33,6 +34,8 @@ class AppContainer(private val appContext: Context) {
     val downloadManager = DownloadManager(appContext)
 
     val saveSyncManager = SaveSyncManager(appContext)
+
+    val metadataExportManager = MetadataExportManager(appContext)
 
     /**
      * Called when server settings change to refresh the API client.

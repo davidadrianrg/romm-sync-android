@@ -230,15 +230,20 @@ class RomRepository(
             coverUrlSmall = resolveCover(pathCoverSmall, urlCover, baseCoverUrl),
             coverUrlLarge = pathCoverLarge?.let { baseCoverUrl + it.removePrefix("/") },
             files = files.map { RomFile(it.filename, it.size) },
-            isMulti = isMulti || hasMultipleFiles,
+            isMulti = multi || hasMultipleFiles,
             revision = revision,
             regions = regions,
             languages = languages,
             genres = genres,
             summary = summary,
             fileNameNoTags = fileNameNoTags,
+            fileNameNoExt = fileNameNoExt,
             fileExtension = fileExtension,
             igdbId = igdbId,
+            screenshots = mergedScreenshots.map { baseCoverUrl + it.removePrefix("/") },
+            videoPath = pathVideo?.let { baseCoverUrl + it.removePrefix("/") },
+            manualPath = pathManual?.let { baseCoverUrl + it.removePrefix("/") },
+            igdbMetadata = igdbMetadata?.toDomain(),
         )
     }
 
@@ -252,4 +257,14 @@ class RomRepository(
             else -> null
         }
     }
+
+    private fun es.davidrg.rommsync.data.remote.dto.IgdbMetadataDto.toDomain() =
+        es.davidrg.rommsync.domain.model.IgdbMetadata(
+            totalRating = totalRating?.toDoubleOrNull(),
+            firstReleaseDate = firstReleaseDate,
+            genres = genres,
+            companies = companies,
+            gameModes = gameModes,
+            playerCount = playerCount,
+        )
 }
