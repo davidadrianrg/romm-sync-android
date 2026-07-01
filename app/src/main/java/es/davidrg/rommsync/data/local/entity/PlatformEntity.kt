@@ -14,4 +14,6 @@ data class PlatformEntity(
     val emulatorId: String? = null,
     /** Override de ruta de saves para esta plataforma. Null = usar ruta por defecto del emulador. */
     val savesPathOverride: String? = null,
+    /** Aspect ratio de los covers de esta plataforma (ej: "2 / 3", "3 / 4", "1 / 1"). */
+    val aspectRatio: String? = null,
 )

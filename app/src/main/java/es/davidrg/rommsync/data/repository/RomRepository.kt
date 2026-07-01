@@ -68,6 +68,7 @@ class RomRepository(
                     slug = dto.slug,
                     name = dto.displayName ?: dto.name,
                     romCount = dto.romCount,
+                    aspectRatio = dto.aspectRatio,
                 )
             }
             ApiResult.Success(Unit)
@@ -319,6 +320,7 @@ class RomRepository(
         visible = visible,
         emulatorId = emulatorId,
         savesPathOverride = savesPathOverride,
+        aspectRatio = aspectRatio,
     )
 
     private fun RomDto.toDomain(): Rom {

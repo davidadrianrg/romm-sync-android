@@ -8,4 +8,5 @@ data class Platform(
     val visible: Boolean = true,
     val emulatorId: String? = null,
     val savesPathOverride: String? = null,
+    val aspectRatio: String? = null,
 )

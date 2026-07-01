@@ -200,6 +200,12 @@ fun LibraryScreen() {
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
     val minCardSize = if (isLandscape) 110.dp else 140.dp
 
+    // Aspect ratio de los covers segun la plataforma seleccionada
+    val coverAspectRatio = remember(selectedPlatformId, platforms) {
+        val platform = platforms.find { it.id == selectedPlatformId }
+        parseAspectRatio(platform?.aspectRatio)
+    }
+
     // ── Infinite scroll state ──────────────────────────────────────────
     val gridState = rememberLazyGridState()
     val isLoadingMore by viewModel.isLoadingMore.collectAsState()
@@ -458,6 +464,7 @@ fun LibraryScreen() {
                     items(filteredRoms, key = { it.rom.id }) { romStatus ->
                         RomCard(
                             romWithStatus = romStatus,
+                            coverAspectRatio = coverAspectRatio,
                             onDownload = {
                                 if (settings.isConfigured) {
                                     container.downloadManager.enqueueDownload(
@@ -628,6 +635,7 @@ fun LibraryScreen() {
 @Composable
 private fun RomCard(
     romWithStatus: RomWithStatus,
+    coverAspectRatio: Float,
     onDownload: (RomWithStatus) -> Unit,
     onLongPress: (RomWithStatus) -> Unit,
 ) {
@@ -637,7 +645,7 @@ private fun RomCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(COVER_ASPECT_RATIO)
+            .aspectRatio(coverAspectRatio)
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .combinedClickable(
@@ -652,7 +660,7 @@ private fun RomCard(
                 .crossfade(true)
                 .build(),
             contentDescription = romWithStatus.rom.name,
-            contentScale = ContentScale.Fit,
+            contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -740,8 +748,22 @@ private fun RomCard(
     }
 }
 
-/** Aspect ratio fijo por celda (2:3 vertical, estándar de carátulas de juegos). */
-private const val COVER_ASPECT_RATIO = 0.667f
+/** Aspect ratio por defecto (2:3) cuando la plataforma no lo especifica. */
+private const val DEFAULT_COVER_ASPECT_RATIO = 0.667f
+
+/**
+ * Parsea un string de aspect ratio como "2 / 3" o "3 / 4" a un Float.
+ * Devuelve el ratio por defecto (2:3) si no se puede parsear.
+ */
+private fun parseAspectRatio(ratioStr: String?): Float {
+    if (ratioStr.isNullOrBlank()) return DEFAULT_COVER_ASPECT_RATIO
+    val parts = ratioStr.split("/").map { it.trim() }
+    if (parts.size != 2) return DEFAULT_COVER_ASPECT_RATIO
+    val w = parts[0].toFloatOrNull() ?: return DEFAULT_COVER_ASPECT_RATIO
+    val h = parts[1].toFloatOrNull() ?: return DEFAULT_COVER_ASPECT_RATIO
+    if (h <= 0f) return DEFAULT_COVER_ASPECT_RATIO
+    return w / h
+}
 
 // ── Bottom sheet: game detail ──────────────────────────────────────────
 @Composable

@@ -31,9 +31,9 @@ interface PlatformDao {
      */
     @Query(
         """
-        INSERT INTO platforms (id, slug, name, romCount, visible)
-        VALUES (:id, :slug, :name, :romCount, COALESCE((SELECT visible FROM platforms WHERE id = :id), 1))
-        ON CONFLICT(id) DO UPDATE SET slug = :slug, name = :name, romCount = :romCount
+        INSERT INTO platforms (id, slug, name, romCount, visible, aspectRatio)
+        VALUES (:id, :slug, :name, :romCount, COALESCE((SELECT visible FROM platforms WHERE id = :id), 1), :aspectRatio)
+        ON CONFLICT(id) DO UPDATE SET slug = :slug, name = :name, romCount = :romCount, aspectRatio = :aspectRatio
         """
     )
     suspend fun upsertPreservingVisibility(
@@ -41,6 +41,7 @@ interface PlatformDao {
         slug: String,
         name: String,
         romCount: Int,
+        aspectRatio: String? = null,
     )
 
     @Query("UPDATE platforms SET visible = :visible WHERE id = :id")

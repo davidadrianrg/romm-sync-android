@@ -13,4 +13,5 @@ data class PlatformDto(
     @Json(name = "display_name") val displayName: String? = null,
     @Json(name = "igdb_id") val igdbId: Int? = null,
     @Json(name = "url_logo") val logoUrl: String? = null,
+    @Json(name = "aspect_ratio") val aspectRatio: String? = null,
 )

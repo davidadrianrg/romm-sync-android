@@ -16,7 +16,7 @@ import es.davidrg.rommsync.data.local.entity.PlatformEntity
         PlatformEntity::class,
         DownloadedRomEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class RomSyncDatabase : RoomDatabase() {
@@ -51,6 +51,15 @@ abstract class RomSyncDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Migration 4 → 5: añade aspect_ratio a plataformas.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE platforms ADD COLUMN aspectRatio TEXT DEFAULT NULL")
+            }
+        }
+
         @Volatile
         private var INSTANCE: RomSyncDatabase? = null
 
@@ -61,7 +70,7 @@ abstract class RomSyncDatabase : RoomDatabase() {
                     RomSyncDatabase::class.java,
                     "romsync.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build()
                     .also { INSTANCE = it }
