@@ -644,6 +644,7 @@ private fun RomCard(
                 onClick = {},
                 onLongClick = { onLongPress(romWithStatus) },
             ),
+        contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
             model = ImageRequest.Builder(context)
@@ -651,7 +652,7 @@ private fun RomCard(
                 .crossfade(true)
                 .build(),
             contentDescription = romWithStatus.rom.name,
-            contentScale = ContentScale.Crop,
+            contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -739,8 +740,8 @@ private fun RomCard(
     }
 }
 
-/** Aspect ratio fijo para todas las carátulas (3:4 vertical, estándar de covers). */
-private const val COVER_ASPECT_RATIO = 0.75f
+/** Aspect ratio fijo por celda (2:3 vertical, estándar de carátulas de juegos). */
+private const val COVER_ASPECT_RATIO = 0.667f
 
 // ── Bottom sheet: game detail ──────────────────────────────────────────
 @Composable
