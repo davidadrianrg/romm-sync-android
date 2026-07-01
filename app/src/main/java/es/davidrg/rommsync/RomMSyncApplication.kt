@@ -18,6 +18,20 @@ class RomMSyncApplication : Application(), Configuration.Provider, ImageLoaderFa
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        restorePeriodicSync()
+    }
+
+    /**
+     * Si el usuario tenia configurada una sincronización periódica, se
+     * re-registra al arrancar la app. WorkManager persiste los trabajos
+     * periódicos entre reinicios del dispositivo, pero re-enqueue con
+     * KEEP garantiza que siempre exista.
+     */
+    private fun restorePeriodicSync() {
+        val interval = container.settingsDataStore.getSyncIntervalMinutesBlocking()
+        if (interval > 0) {
+            container.saveSyncManager.schedulePeriodicSync(interval)
+        }
     }
 
     override val workManagerConfiguration: Configuration

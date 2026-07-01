@@ -44,6 +44,7 @@ class SettingsDataStore(private val context: Context) {
         val SAVE_SYNC_ENABLED = stringPreferencesKey("save_sync_enabled")
         val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
         val LAST_SYNC_SUMMARY = stringPreferencesKey("last_sync_summary")
+        val SAVE_SYNC_INTERVAL_MINUTES = intPreferencesKey("save_sync_interval_minutes")
         val ESDE_DATA_DIR = stringPreferencesKey("esde_data_dir")
         val RETROHRAI_MEDIA_PATH = stringPreferencesKey("retrohrai_media_path")
 
@@ -125,6 +126,9 @@ class SettingsDataStore(private val context: Context) {
     val saveSyncEnabled: Flow<Boolean> = context.dataStore.data.map {
         (it[SAVE_SYNC_ENABLED] ?: "false") == "true"
     }
+    val saveSyncIntervalMinutes: Flow<Int> = context.dataStore.data.map {
+        it[SAVE_SYNC_INTERVAL_MINUTES] ?: 0
+    }
     val lastSyncTimestamp: Flow<Long> = context.dataStore.data.map {
         it[LAST_SYNC_TIMESTAMP] ?: 0L
     }
@@ -193,6 +197,10 @@ class SettingsDataStore(private val context: Context) {
         context.dataStore.edit { it[SAVE_SYNC_ENABLED] = if (enabled) "true" else "false" }
     }
 
+    suspend fun setSaveSyncIntervalMinutes(minutes: Int) {
+        context.dataStore.edit { it[SAVE_SYNC_INTERVAL_MINUTES] = minutes }
+    }
+
     suspend fun setEsdeDataDir(path: String) {
         context.dataStore.edit { it[ESDE_DATA_DIR] = path.trimEnd('/') }
     }
@@ -252,6 +260,12 @@ class SettingsDataStore(private val context: Context) {
         return runCatching {
             runBlocking { context.dataStore.data.first()[RETROARCH_BASE_PATH] ?: DEFAULT_RETROARCH_PATH }
         }.getOrDefault(DEFAULT_RETROARCH_PATH)
+    }
+
+    fun getSyncIntervalMinutesBlocking(): Int {
+        return runCatching {
+            runBlocking { context.dataStore.data.first()[SAVE_SYNC_INTERVAL_MINUTES] ?: 0 }
+        }.getOrDefault(0)
     }
 
     fun getSyncDeviceIdBlocking(): Int? {

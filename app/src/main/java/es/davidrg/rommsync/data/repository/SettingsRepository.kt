@@ -20,6 +20,7 @@ class SettingsRepository(private val dataStore: SettingsDataStore) {
 
     val retroArchBasePath: Flow<String> = dataStore.retroArchBasePath
     val saveSyncEnabled: Flow<Boolean> = dataStore.saveSyncEnabled
+    val saveSyncIntervalMinutes: Flow<Int> = dataStore.saveSyncIntervalMinutes
     val lastSyncTimestamp: Flow<Long> = dataStore.lastSyncTimestamp
     val lastSyncSummary: Flow<String> = dataStore.lastSyncSummary
     val esdeDataDir: Flow<String> = dataStore.esdeDataDir
@@ -27,6 +28,8 @@ class SettingsRepository(private val dataStore: SettingsDataStore) {
 
     suspend fun setLastSync(timestamp: Long, summary: String) =
         dataStore.setLastSync(timestamp, summary)
+    suspend fun setSaveSyncIntervalMinutes(minutes: Int) =
+        dataStore.setSaveSyncIntervalMinutes(minutes)
     suspend fun setEsdeDataDir(path: String) = dataStore.setEsdeDataDir(path)
     suspend fun setRetroHraiMediaPath(path: String) = dataStore.setRetroHraiMediaPath(path)
 }

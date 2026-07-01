@@ -71,3 +71,26 @@ fun hasNotificationPermission(context: android.content.Context): Boolean {
         true
     }
 }
+
+/**
+ * Comprueba si la app está exenta de optimizaciones de batería.
+ * Necesario para que la sincronización periódica en segundo plano
+ * funcione de forma fiable en todos los fabricantes.
+ */
+fun isIgnoringBatteryOptimizations(context: android.content.Context): Boolean {
+    val powerManager = context.getSystemService(android.content.Context.POWER_SERVICE)
+        as android.os.PowerManager
+    return powerManager.isIgnoringBatteryOptimizations(context.packageName)
+}
+
+/**
+ * Solicita al sistema que excluya la app de las optimizaciones de batería.
+ * Abre un diálogo del sistema directamente (no la pantalla de ajustes).
+ */
+@android.annotation.SuppressLint("BatteryLife")
+fun requestIgnoreBatteryOptimizations(context: android.content.Context) {
+    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+        data = Uri.parse("package:${context.packageName}")
+    }
+    context.startActivity(intent)
+}

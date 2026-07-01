@@ -21,7 +21,6 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -78,27 +77,15 @@ fun ConfigScreen() {
     var serverUrl by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf("") }
     var apiKeyVisible by remember { mutableStateOf(false) }
-    var retroArchPath by remember { mutableStateOf("") }
 
     // ── Folder picker dialog state ───────────────────────────────────────
     var showRomsPicker by remember { mutableStateOf(false) }
-    var showRetroArchPicker by remember { mutableStateOf(false) }
     var showEsdePicker by remember { mutableStateOf(false) }
     var showRetroHraiPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(settings.serverUrl, settings.apiKey) {
         if (serverUrl.isEmpty() && settings.serverUrl.isNotEmpty()) serverUrl = settings.serverUrl
         if (apiKey.isEmpty() && settings.apiKey.isNotEmpty()) apiKey = settings.apiKey
-    }
-
-    // Cargar ruta de RetroArch
-    val retroArchBasePath by container.settingsRepository.retroArchBasePath.collectAsState(
-        initial = es.davidrg.rommsync.data.local.SettingsDataStore.DEFAULT_RETROARCH_PATH,
-    )
-    LaunchedEffect(retroArchBasePath) {
-        if (retroArchPath.isEmpty() && retroArchBasePath.isNotEmpty()) {
-            retroArchPath = retroArchBasePath
-        }
     }
 
     // Cargar ruta de datos de ES-DE
@@ -224,12 +211,20 @@ fun ConfigScreen() {
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    trailingIcon = {
-                        IconButton(onClick = { showRomsPicker = true }) {
-                            Icon(Icons.Filled.Folder, contentDescription = "Explorar carpetas")
-                        }
-                    },
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                FilledTonalButton(
+                    onClick = { showRomsPicker = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        Icons.Filled.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text("Seleccionar carpeta")
+                }
             }
 
             // ── ES-DE Data Dir ───────────────────────────────────────────
@@ -245,12 +240,20 @@ fun ConfigScreen() {
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    trailingIcon = {
-                        IconButton(onClick = { showEsdePicker = true }) {
-                            Icon(Icons.Filled.Folder, contentDescription = "Explorar carpetas")
-                        }
-                    },
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                FilledTonalButton(
+                    onClick = { showEsdePicker = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        Icons.Filled.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text("Seleccionar carpeta")
+                }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     "Aquí es donde ES-DE guarda los gamelist.xml. " +
@@ -273,12 +276,20 @@ fun ConfigScreen() {
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    trailingIcon = {
-                        IconButton(onClick = { showRetroHraiPicker = true }) {
-                            Icon(Icons.Filled.Folder, contentDescription = "Explorar carpetas")
-                        }
-                    },
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                FilledTonalButton(
+                    onClick = { showRetroHraiPicker = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        Icons.Filled.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text("Seleccionar carpeta")
+                }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     "Los metadatos se escribirán como " +
@@ -304,49 +315,6 @@ fun ConfigScreen() {
                     valueRange = 1f..5f,
                     steps = 3,
                 )
-            }
-
-            // ── Save Sync ───────────────────────────────────────────────
-            SettingsSection(
-                icon = Icons.Outlined.Sync,
-                title = "Sincronización de saves",
-            ) {
-                OutlinedTextField(
-                    value = retroArchPath,
-                    onValueChange = { retroArchPath = it; viewModel.setRetroArchBasePath(it) },
-                    label = { Text("Ruta base RetroArch") },
-                    placeholder = { Text("/storage/emulated/0/RetroArch") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    trailingIcon = {
-                        IconButton(onClick = { showRetroArchPicker = true }) {
-                            Icon(Icons.Filled.Folder, contentDescription = "Explorar carpetas")
-                        }
-                    },
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Esta ruta se usa como base para plataformas asignadas a RetroArch. " +
-                        "Puedes configurar la ruta de saves de cada plataforma " +
-                        "individualmente en la pestaña Plataformas.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                FilledTonalButton(
-                    onClick = { container.saveSyncManager.triggerSync() },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = settings.isConfigured,
-                ) {
-                    Icon(
-                        Icons.Outlined.Sync,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text("Sincronizar ahora")
-                }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -400,19 +368,6 @@ fun ConfigScreen() {
             onSelect = { path ->
                 viewModel.setRomsRootPath(path)
                 showRomsPicker = false
-            },
-        )
-    }
-    if (showRetroArchPicker) {
-        FolderPickerDialog(
-            initialPath = retroArchBasePath.ifBlank {
-                es.davidrg.rommsync.data.local.SettingsDataStore.DEFAULT_RETROARCH_PATH
-            },
-            onDismiss = { showRetroArchPicker = false },
-            onSelect = { path ->
-                viewModel.setRetroArchBasePath(path)
-                retroArchPath = path
-                showRetroArchPicker = false
             },
         )
     }
