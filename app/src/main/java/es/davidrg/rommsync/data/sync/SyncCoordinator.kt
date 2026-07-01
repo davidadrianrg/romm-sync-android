@@ -58,9 +58,8 @@ class SyncCoordinator(
 
         val api = NetworkModule.createApiService(serverUrl, apiKey)
 
-        // 1. Asegurar registro del dispositivo
+        // 1. Intentar registro del dispositivo (no bloquea si el servidor no soporta el endpoint)
         val deviceId = ensureDeviceRegistered(api, retroArchBase)
-            ?: return@withContext SyncResult(error = "No se pudo registrar el dispositivo")
 
         // 2. Escanear saves locales de ROMs descargados
         val allDownloadedRoms = romDao.getAllDownloadedRomsBlocking()
@@ -123,7 +122,7 @@ class SyncCoordinator(
             .map { RomSaveInfo(romId = it.romId, saves = emptyList()) }
 
         val negotiateRequest = NegotiateRequest(
-            deviceId = deviceId,
+            deviceId = deviceId ?: 0,
             roms = romSaveInfos + romsWithoutLocalSaves,
         )
 
@@ -242,8 +241,11 @@ class SyncCoordinator(
             )
             settingsDataStore.setSyncDeviceId(response.id)
             response.id
+        } catch (e: retrofit2.HttpException) {
+            Log.w(TAG, "Device registration HTTP ${e.code()}: ${e.message()}", e)
+            null
         } catch (e: Exception) {
-            Log.e(TAG, "Device registration failed", e)
+            Log.w(TAG, "Device registration failed", e)
             null
         }
     }
