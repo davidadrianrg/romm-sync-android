@@ -90,9 +90,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
-import coil.AsyncImagePainter
 import es.davidrg.rommsync.RomMSyncApplication
 import es.davidrg.rommsync.domain.model.DownloadStatus
 import es.davidrg.rommsync.domain.model.Platform
@@ -457,9 +457,8 @@ fun LibraryScreen() {
                     columns = StaggeredGridCells.Adaptive(minSize = minCardSize),
                     state = gridState,
                     modifier = Modifier.fillMaxSize(),
-                    horizontalItemSpacing = 8.dp,
                     verticalItemSpacing = 8.dp,
-                    contentPadding = PaddingValues(vertical = 8.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp),
                 ) {
                     items(filteredRoms, key = { it.rom.id }) { romStatus ->
                         RomCard(
@@ -651,10 +650,10 @@ private fun RomCard(
     val aspectRatio = when (painterState) {
         is AsyncImagePainter.State.Success -> {
             val size = painter.intrinsicSize
-            if (size != androidx.compose.ui.unit.IntSize.Unspecified
+            if (size != androidx.compose.ui.geometry.Size.Unspecified
                 && size.width > 0 && size.height > 0
             ) {
-                size.width.toFloat() / size.height.toFloat()
+                size.width / size.height
             } else {
                 DEFAULT_COVER_RATIO
             }
