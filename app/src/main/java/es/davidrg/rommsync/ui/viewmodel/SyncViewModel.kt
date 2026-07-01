@@ -103,17 +103,19 @@ class SyncViewModel(
         val results = mutableListOf<SavePreviewItem>()
 
         for (rom in downloadedRoms) {
+            if (rom.excludedFromSync) continue
+
             val config = platformConfigs[rom.platformSlug]
-            val emulatorId = config?.emulatorId
-                ?: SaveHandlerRegistry.getDefaultEmulator(rom.platformSlug).id
             val handler = SaveHandlerRegistry.getHandler(
                 platformSlug = rom.platformSlug,
                 emulatorId = config?.emulatorId,
             )
 
-            val effectiveBasePath = config?.savesPathOverride?.takeIf { it.isNotBlank() }
+            val effectiveBasePath = rom.savesPathOverride?.takeIf { it.isNotBlank() }
+                ?: config?.savesPathOverride?.takeIf { it.isNotBlank() }
                 ?: SaveHandlerRegistry.getDefaultSavesPath(
-                    emulatorId = emulatorId,
+                    emulatorId = config?.emulatorId
+                        ?: SaveHandlerRegistry.getDefaultEmulator(rom.platformSlug).id,
                     platformSlug = rom.platformSlug,
                     retroArchBase = retroArchBase,
                 )

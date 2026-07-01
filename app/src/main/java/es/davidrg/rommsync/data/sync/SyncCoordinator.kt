@@ -63,9 +63,15 @@ class SyncCoordinator(
             ?: return@withContext SyncResult(error = "No se pudo registrar el dispositivo")
 
         // 2. Escanear saves locales de ROMs descargados
-        val downloadedRoms = romDao.getAllDownloadedRomsBlocking()
-        if (downloadedRoms.isEmpty()) {
+        val allDownloadedRoms = romDao.getAllDownloadedRomsBlocking()
+        if (allDownloadedRoms.isEmpty()) {
             return@withContext SyncResult(message = "No hay ROMs descargados para sincronizar")
+        }
+
+        // Excluir los juegos marcados como excluidos de la sincronización.
+        val downloadedRoms = allDownloadedRoms.filterNot { it.excludedFromSync }
+        if (downloadedRoms.isEmpty()) {
+            return@withContext SyncResult(message = "Todos los ROMs están excluidos de la sincronización")
         }
 
         // Cargar configuración de plataformas para resolver handlers
@@ -83,13 +89,7 @@ class SyncCoordinator(
             )
             handlerByRom[rom.romId] = handler
 
-            val effectiveBasePath = config?.savesPathOverride?.takeIf { it.isNotBlank() }
-                ?: SaveHandlerRegistry.getDefaultSavesPath(
-                    emulatorId = config?.emulatorId
-                        ?: SaveHandlerRegistry.getDefaultEmulator(rom.platformSlug).id,
-                    platformSlug = rom.platformSlug,
-                    retroArchBase = retroArchBase,
-                )
+            val effectiveBasePath = resolveSavesBasePath(rom, config, retroArchBase)
 
             val saves = handler.findSaves(
                 romId = rom.romId,
@@ -156,13 +156,7 @@ class SyncCoordinator(
                     val handler = handlerByRom[op.romId]
                     if (rom != null && op.source != null && handler != null) {
                         val config = platformConfigs[rom.platformSlug]
-                        val effectiveBasePath = config?.savesPathOverride?.takeIf { it.isNotBlank() }
-                            ?: SaveHandlerRegistry.getDefaultSavesPath(
-                                emulatorId = config?.emulatorId
-                                    ?: SaveHandlerRegistry.getDefaultEmulator(rom.platformSlug).id,
-                                platformSlug = rom.platformSlug,
-                                retroArchBase = retroArchBase,
-                            )
+                        val effectiveBasePath = resolveSavesBasePath(rom, config, retroArchBase)
                         val ok = executeDownload(
                             api = api,
                             sourceUrl = op.source,
@@ -204,6 +198,28 @@ class SyncCoordinator(
             downloaded = negotiateResponse.operations.count { it.type == "download" && true },
             conflicts = conflicts.size,
             message = buildResultMessage(completed, failed, conflicts.size),
+        )
+    }
+
+    /**
+     * Resuelve la ruta base de saves para un ROM concreto, con este orden de
+     * prioridad:
+     * 1. Override por juego (rom.savesPathOverride).
+     * 2. Override por plataforma (config.savesPathOverride).
+     * 3. Ruta por defecto del emulador/plataforma.
+     */
+    private fun resolveSavesBasePath(
+        rom: es.davidrg.rommsync.data.local.entity.DownloadedRomEntity,
+        config: es.davidrg.rommsync.data.local.entity.PlatformEntity?,
+        retroArchBase: String,
+    ): String {
+        rom.savesPathOverride?.takeIf { it.isNotBlank() }?.let { return it }
+        config?.savesPathOverride?.takeIf { it.isNotBlank() }?.let { return it }
+        return SaveHandlerRegistry.getDefaultSavesPath(
+            emulatorId = config?.emulatorId
+                ?: SaveHandlerRegistry.getDefaultEmulator(rom.platformSlug).id,
+            platformSlug = rom.platformSlug,
+            retroArchBase = retroArchBase,
         )
     }
 

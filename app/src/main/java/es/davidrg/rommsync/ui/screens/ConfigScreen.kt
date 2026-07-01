@@ -15,12 +15,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -56,6 +58,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import es.davidrg.rommsync.RomMSyncApplication
 import es.davidrg.rommsync.ui.components.FolderPickerDialog
 import es.davidrg.rommsync.ui.viewmodel.ConfigViewModel
+import es.davidrg.rommsync.ui.viewmodel.LibraryScanState
 import es.davidrg.rommsync.util.hasAllFilesAccess
 import es.davidrg.rommsync.util.rememberNotificationPermissionState
 
@@ -67,11 +70,12 @@ fun ConfigScreen() {
 
     val viewModel: ConfigViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { ConfigViewModel(container.settingsRepository) }
+            initializer { ConfigViewModel(container.settingsRepository, container.romRepository) }
         }
     )
 
     val settings by viewModel.settings.collectAsState()
+    val scanState by viewModel.scanState.collectAsState()
     rememberNotificationPermissionState()
 
     var serverUrl by remember { mutableStateOf("") }
@@ -224,6 +228,85 @@ fun ConfigScreen() {
                     )
                     Spacer(modifier = Modifier.size(6.dp))
                     Text("Seleccionar carpeta")
+                }
+            }
+
+            // ── Escanear biblioteca local ───────────────────────────────
+            SettingsSection(
+                icon = Icons.Outlined.Search,
+                title = "Escanear biblioteca",
+            ) {
+                Text(
+                    "Detecta los juegos que ya tienes en disco (por ejemplo copiados " +
+                        "desde el PC) y los marca como descargados comparándolos con el servidor.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                val isScanning = scanState is LibraryScanState.Scanning
+                FilledTonalButton(
+                    onClick = { viewModel.scanLibrary(serverUrl, apiKey) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = settings.isConfigured && !isScanning,
+                ) {
+                    if (isScanning) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            Icons.Filled.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text("Escanear ahora")
+                }
+
+                when (val s = scanState) {
+                    is LibraryScanState.Scanning -> {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            s.platformName?.let { "Escaneando: $it..." } ?: "Preparando escaneo...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    is LibraryScanState.Done -> {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            if (s.detected > 0) {
+                                "${s.detected} juego${if (s.detected != 1) "s" else ""} " +
+                                    "detectado${if (s.detected != 1) "s" else ""} " +
+                                    "de ${s.scanned} comprobados."
+                            } else {
+                                "No se detectaron juegos nuevos (${s.scanned} comprobados)."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                        )
+                    }
+                    is LibraryScanState.Error -> {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Error: ${s.message}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    LibraryScanState.Idle -> {}
+                }
+
+                if (!settings.isConfigured) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Configura y guarda el servidor RomM antes de escanear.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             }
 

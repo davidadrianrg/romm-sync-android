@@ -12,6 +12,7 @@ import es.davidrg.rommsync.domain.model.ErrorKind
 import es.davidrg.rommsync.domain.model.Platform
 import es.davidrg.rommsync.domain.model.Rom
 import es.davidrg.rommsync.domain.model.RomFile
+import es.davidrg.rommsync.download.PathMapper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -32,6 +33,10 @@ class RomRepository(
     private var apiService: RomMApiService? = null
     private var currentServerUrl: String = ""
     private var currentApiKey: String = ""
+
+    companion object {
+        private const val SCAN_PAGE_SIZE = 100
+    }
 
     fun configureApi(serverUrl: String, apiKey: String) {
         if (serverUrl != currentServerUrl || apiKey != currentApiKey) {
@@ -206,6 +211,104 @@ class RomRepository(
 
     suspend fun isRomDownloaded(romId: Int): Boolean = romDao.isDownloaded(romId)
 
+    // ── Escaneo de biblioteca local ─────────────────────────────────────
+
+    /**
+     * Escanea la biblioteca ya presente en disco y marca como descargados los
+     * ROMs cuyos ficheros existan en la ruta esperada
+     * (`{romsRootPath}/{platformSlug}/{fileName}`).
+     *
+     * Útil cuando el usuario ha copiado los juegos manualmente desde el PC en
+     * vez de descargarlos desde RomM: recorre todas las plataformas, pagina sus
+     * ROMs desde el servidor y comprueba la existencia del fichero local.
+     *
+     * @param romsRootPath ruta raíz de ROMs configurada.
+     * @param onProgress callback opcional con el nombre de la plataforma en curso.
+     * @return [ScanResult] con el número de juegos detectados y comprobados.
+     */
+    suspend fun scanDownloadedLibrary(
+        romsRootPath: String,
+        onProgress: (platformName: String) -> Unit = {},
+    ): ScanResult = withContext(Dispatchers.IO) {
+        val platforms = platformDao.getAllPlatformsBlocking()
+        if (platforms.isEmpty()) {
+            return@withContext ScanResult(error = "No hay plataformas. Sincroniza el servidor primero.")
+        }
+
+        val alreadyDownloaded = romDao.getAllDownloadedRoms().map { it.romId }.toMutableSet()
+        var detected = 0
+        var scanned = 0
+
+        try {
+            for (platform in platforms) {
+                onProgress(platform.name)
+                // Si la carpeta de la plataforma no existe, saltamos su escaneo.
+                val platformDir = PathMapper.getPlatformDir(romsRootPath, platform.slug)
+                if (!platformDir.isDirectory) continue
+
+                var offset = 0
+                while (true) {
+                    val result = fetchRoms(platform.id, limit = SCAN_PAGE_SIZE, offset = offset)
+                    val roms = (result as? ApiResult.Success)?.data ?: break
+                    if (roms.isEmpty()) break
+
+                    for (rom in roms) {
+                        scanned++
+                        if (rom.id in alreadyDownloaded) continue
+                        val localFile = findRomFileOnDisk(romsRootPath, rom) ?: continue
+                        romDao.insertDownloadedRom(
+                            DownloadedRomEntity(
+                                romId = rom.id,
+                                name = rom.name,
+                                fileName = rom.fileName,
+                                platformId = rom.platformId,
+                                platformSlug = rom.platformSlug,
+                                localPath = localFile.absolutePath,
+                                fileSizeBytes = if (localFile.isFile) localFile.length() else 0L,
+                            )
+                        )
+                        alreadyDownloaded.add(rom.id)
+                        detected++
+                    }
+
+                    offset += roms.size
+                    if (roms.size < SCAN_PAGE_SIZE) break
+                }
+            }
+            ScanResult(detected = detected, scanned = scanned)
+        } catch (e: Exception) {
+            ScanResult(detected = detected, scanned = scanned, error = e.message ?: "Error durante el escaneo")
+        }
+    }
+
+    /**
+     * Busca en la carpeta de la plataforma un fichero (o carpeta, para ROMs
+     * multi-archivo) que coincida con el nombre esperado. La comparación es
+     * insensible a mayúsculas para tolerar diferencias al copiar desde PC.
+     */
+    private fun findRomFileOnDisk(romsRootPath: String, rom: Rom): File? {
+        val platformDir = PathMapper.getPlatformDir(romsRootPath, rom.platformSlug)
+        if (!platformDir.isDirectory) return null
+        val entries = platformDir.listFiles() ?: return null
+        return entries.firstOrNull { it.name.equals(rom.fileName, ignoreCase = true) }
+    }
+
+    // ── Configuración de sync por juego ─────────────────────────────────
+
+    /** Observa el registro de descarga de una ROM (incluye config de sync). */
+    fun observeDownloadedRom(romId: Int): Flow<DownloadedRomEntity?> =
+        romDao.observeDownloadedRom(romId)
+
+    /** Override de ruta base de saves solo para este juego. Null = usar la de la plataforma. */
+    suspend fun updateRomSavesPathOverride(romId: Int, path: String?) {
+        romDao.updateSavesPathOverride(romId, path?.takeIf { it.isNotBlank() })
+    }
+
+    /** Excluye o incluye un juego de la sincronización de partidas. */
+    suspend fun updateRomExcludedFromSync(romId: Int, excluded: Boolean) {
+        romDao.updateExcludedFromSync(romId, excluded)
+    }
+
     // ── Mappers ────────────────────────────────────────────────────────
 
     private fun PlatformEntity.toDomain() = Platform(
@@ -267,4 +370,19 @@ class RomRepository(
             gameModes = gameModes,
             playerCount = playerCount,
         )
+}
+
+/**
+ * Resultado de un escaneo de biblioteca local.
+ *
+ * @property detected número de juegos nuevos marcados como descargados.
+ * @property scanned número total de ROMs comprobados contra el disco.
+ * @property error mensaje de error si el escaneo no pudo completarse.
+ */
+data class ScanResult(
+    val detected: Int = 0,
+    val scanned: Int = 0,
+    val error: String? = null,
+) {
+    val isSuccess: Boolean get() = error == null
 }

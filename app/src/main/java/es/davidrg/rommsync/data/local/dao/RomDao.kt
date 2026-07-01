@@ -16,6 +16,9 @@ interface RomDao {
     @Query("SELECT * FROM downloaded_roms WHERE romId = :romId")
     suspend fun getDownloadedRom(romId: Int): DownloadedRomEntity?
 
+    @Query("SELECT * FROM downloaded_roms WHERE romId = :romId")
+    fun observeDownloadedRom(romId: Int): Flow<DownloadedRomEntity?>
+
     @Query("SELECT romId FROM downloaded_roms")
     fun getAllDownloadedRomIds(): Flow<List<Int>>
 
@@ -24,6 +27,12 @@ interface RomDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM downloaded_roms WHERE romId = :romId)")
     suspend fun isDownloaded(romId: Int): Boolean
+
+    @Query("UPDATE downloaded_roms SET savesPathOverride = :path WHERE romId = :romId")
+    suspend fun updateSavesPathOverride(romId: Int, path: String?)
+
+    @Query("UPDATE downloaded_roms SET excludedFromSync = :excluded WHERE romId = :romId")
+    suspend fun updateExcludedFromSync(romId: Int, excluded: Boolean)
 
     @Query("DELETE FROM downloaded_roms WHERE romId = :romId")
     suspend fun deleteDownloadedRom(romId: Int)

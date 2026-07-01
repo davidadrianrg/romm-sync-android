@@ -16,7 +16,7 @@ import es.davidrg.rommsync.data.local.entity.PlatformEntity
         PlatformEntity::class,
         DownloadedRomEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class RomSyncDatabase : RoomDatabase() {
@@ -41,6 +41,16 @@ abstract class RomSyncDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Migration 3 → 4: añade columnas de configuración de sync por juego.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE downloaded_roms ADD COLUMN savesPathOverride TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE downloaded_roms ADD COLUMN excludedFromSync INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         @Volatile
         private var INSTANCE: RomSyncDatabase? = null
 
@@ -51,7 +61,7 @@ abstract class RomSyncDatabase : RoomDatabase() {
                     RomSyncDatabase::class.java,
                     "romsync.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build()
                     .also { INSTANCE = it }

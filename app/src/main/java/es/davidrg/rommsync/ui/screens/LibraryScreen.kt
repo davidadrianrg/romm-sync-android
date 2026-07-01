@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.AlertDialog
@@ -495,22 +496,46 @@ fun LibraryScreen() {
 
     // ── Bottom sheet: game details ─────────────────────────────────────
     if (selectedRom != null) {
+        val rom = selectedRom!!
+        val isDownloaded = romsWithStatus.any { it.rom.id == rom.id && it.status == DownloadStatus.DOWNLOADED }
+        val retroArchBasePath by container.settingsRepository.retroArchBasePath.collectAsState(
+            initial = es.davidrg.rommsync.data.local.SettingsDataStore.DEFAULT_RETROARCH_PATH,
+        )
+        val syncConfig by viewModel.observeRomSyncConfig(rom.id)
+            .collectAsState(initial = null)
+        // Ruta de saves que hereda de la plataforma (la que se sobreescribe por juego)
+        val platform = platforms.find { it.id == rom.platformId }
+        val platformSavesPath = remember(platform, retroArchBasePath) {
+            platform?.savesPathOverride?.takeIf { it.isNotBlank() }
+                ?: es.davidrg.rommsync.data.sync.platform.SaveHandlerRegistry.getDefaultSavesPath(
+                    emulatorId = platform?.emulatorId
+                        ?: es.davidrg.rommsync.data.sync.platform.SaveHandlerRegistry
+                            .getDefaultEmulator(rom.platformSlug).id,
+                    platformSlug = rom.platformSlug,
+                    retroArchBase = retroArchBasePath,
+                )
+        }
         ModalBottomSheet(
             onDismissRequest = { selectedRom = null },
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surface,
         ) {
             RomDetailSheet(
-                rom = selectedRom!!,
-                isDownloaded = romsWithStatus.any { it.rom.id == selectedRom!!.id && it.status == DownloadStatus.DOWNLOADED },
-                isDownloading = romsWithStatus.any { it.rom.id == selectedRom!!.id && it.status == DownloadStatus.DOWNLOADING },
+                rom = rom,
+                isDownloaded = isDownloaded,
+                isDownloading = romsWithStatus.any { it.rom.id == rom.id && it.status == DownloadStatus.DOWNLOADING },
+                savesPathOverride = syncConfig?.savesPathOverride,
+                excludedFromSync = syncConfig?.excludedFromSync ?: false,
+                platformSavesPath = platformSavesPath,
+                onSavesPathOverrideChange = { path -> viewModel.setRomSavesPathOverride(rom.id, path) },
+                onExcludedFromSyncChange = { excluded -> viewModel.setRomExcludedFromSync(rom.id, excluded) },
                 onDownload = {
                     if (settings.isConfigured) {
                         container.downloadManager.enqueueDownload(
-                            rom = selectedRom!!,
+                            rom = rom,
                             serverUrl = settings.serverUrl,
                         )
-                        viewModel.onDownloadEnqueued(selectedRom!!.name)
+                        viewModel.onDownloadEnqueued(rom.name)
                     }
                     selectedRom = null
                 },
@@ -748,11 +773,17 @@ private fun RomDetailSheet(
     rom: Rom,
     isDownloaded: Boolean,
     isDownloading: Boolean,
+    savesPathOverride: String?,
+    excludedFromSync: Boolean,
+    platformSavesPath: String,
+    onSavesPathOverrideChange: (String?) -> Unit,
+    onExcludedFromSyncChange: (Boolean) -> Unit,
     onDownload: () -> Unit,
     onDelete: () -> Unit,
     onClose: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var showFolderPicker by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -917,6 +948,107 @@ private fun RomDetailSheet(
                 }
             }
         }
+
+        // ── Configuración de sincronización de partidas ────────────────
+        // Solo tiene sentido para juegos descargados (son los que se sincronizan).
+        if (isDownloaded) {
+            Spacer(modifier = Modifier.size(24.dp))
+            androidx.compose.material3.HorizontalDivider()
+            Spacer(modifier = Modifier.size(16.dp))
+
+            Text(
+                "Sincronización de partidas",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(modifier = Modifier.size(12.dp))
+
+            // Toggle de exclusión
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Excluir de la sincronización",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        "Las partidas de este juego no se subirán ni descargarán.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                androidx.compose.material3.Switch(
+                    checked = excludedFromSync,
+                    onCheckedChange = onExcludedFromSyncChange,
+                )
+            }
+
+            // Ruta de saves específica (deshabilitada si está excluido)
+            if (!excludedFromSync) {
+                Spacer(modifier = Modifier.size(16.dp))
+                val hasOverride = !savesPathOverride.isNullOrBlank()
+                val displayedPath = savesPathOverride?.takeIf { it.isNotBlank() } ?: platformSavesPath
+
+                Text(
+                    "Ubicación de las partidas",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(modifier = Modifier.size(4.dp))
+                Text(
+                    displayedPath,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    if (hasOverride) "Ruta personalizada para este juego"
+                    else "Heredada de la plataforma",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.size(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    androidx.compose.material3.FilledTonalButton(
+                        onClick = { showFolderPicker = true },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            Icons.Filled.Folder,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.size(6.dp))
+                        Text("Seleccionar carpeta")
+                    }
+                    if (hasOverride) {
+                        TextButton(onClick = { onSavesPathOverrideChange(null) }) {
+                            Text("Restablecer")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showFolderPicker) {
+        es.davidrg.rommsync.ui.components.FolderPickerDialog(
+            initialPath = savesPathOverride?.takeIf { it.isNotBlank() } ?: platformSavesPath,
+            onDismiss = { showFolderPicker = false },
+            onSelect = { path ->
+                onSavesPathOverrideChange(path)
+                showFolderPicker = false
+            },
+        )
     }
 }
 

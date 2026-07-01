@@ -57,6 +57,23 @@ class LibraryViewModel(
     private val _events = MutableSharedFlow<LibraryEvent>(extraBufferCapacity = 5)
     val events: SharedFlow<LibraryEvent> = _events.asSharedFlow()
 
+    /** Observa la configuración de sync (ruta/exclusión) de un juego descargado. */
+    fun observeRomSyncConfig(romId: Int) = romRepository.observeDownloadedRom(romId)
+
+    /** Fija (o limpia con null) el override de ruta de saves de un juego concreto. */
+    fun setRomSavesPathOverride(romId: Int, path: String?) {
+        viewModelScope.launch {
+            romRepository.updateRomSavesPathOverride(romId, path)
+        }
+    }
+
+    /** Excluye o incluye un juego en la sincronización de partidas. */
+    fun setRomExcludedFromSync(romId: Int, excluded: Boolean) {
+        viewModelScope.launch {
+            romRepository.updateRomExcludedFromSync(romId, excluded)
+        }
+    }
+
     val downloadedIds: StateFlow<Set<Int>> = romRepository.getDownloadedRomIds()
         .stateIn(
             scope = viewModelScope,
