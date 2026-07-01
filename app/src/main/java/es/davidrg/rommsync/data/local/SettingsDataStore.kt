@@ -41,6 +41,7 @@ class SettingsDataStore(private val context: Context) {
         val MAX_CONCURRENT_DOWNLOADS = intPreferencesKey("max_concurrent_downloads")
         val RETROARCH_BASE_PATH = stringPreferencesKey("retroarch_base_path")
         val DEVICE_ID = intPreferencesKey("sync_device_id")
+        val DEVICE_ID_STRING = stringPreferencesKey("sync_device_id_string")
         val SAVE_SYNC_ENABLED = stringPreferencesKey("save_sync_enabled")
         val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
         val LAST_SYNC_SUMMARY = stringPreferencesKey("last_sync_summary")
@@ -123,6 +124,7 @@ class SettingsDataStore(private val context: Context) {
         it[RETROARCH_BASE_PATH] ?: DEFAULT_RETROARCH_PATH
     }
     val syncDeviceId: Flow<Int?> = context.dataStore.data.map { it[DEVICE_ID] }
+    val syncDeviceIdString: Flow<String?> = context.dataStore.data.map { it[DEVICE_ID_STRING] }
     val saveSyncEnabled: Flow<Boolean> = context.dataStore.data.map {
         (it[SAVE_SYNC_ENABLED] ?: "false") == "true"
     }
@@ -184,6 +186,10 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setSyncDeviceId(id: Int) {
         context.dataStore.edit { it[DEVICE_ID] = id }
+    }
+
+    suspend fun setSyncDeviceIdString(id: String) {
+        context.dataStore.edit { it[DEVICE_ID_STRING] = id }
     }
 
     suspend fun setLastSync(timestamp: Long, summary: String) {
@@ -271,6 +277,12 @@ class SettingsDataStore(private val context: Context) {
     fun getSyncDeviceIdBlocking(): Int? {
         return runCatching {
             runBlocking { context.dataStore.data.first()[DEVICE_ID] }
+        }.getOrNull()
+    }
+
+    fun getSyncDeviceIdStringBlocking(): String? {
+        return runCatching {
+            runBlocking { context.dataStore.data.first()[DEVICE_ID_STRING] }
         }.getOrNull()
     }
 

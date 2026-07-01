@@ -8,7 +8,6 @@ import es.davidrg.rommsync.data.remote.dto.NegotiateRequest
 import es.davidrg.rommsync.data.remote.dto.NegotiateResponse
 import es.davidrg.rommsync.data.remote.dto.SessionCompleteRequest
 import okhttp3.MultipartBody
-import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -16,6 +15,7 @@ import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.http.Path
+import retrofit2.http.Query
 import retrofit2.http.QueryMap
 import retrofit2.http.Streaming
 
@@ -78,13 +78,16 @@ interface RomMApiService {
 
     /**
      * Upload a save file to the server.
-     * POST /api/saves
+     * POST /api/saves?rom_id=...&emulator=...&device_id=...
      */
     @Multipart
     @POST("api/saves")
     suspend fun uploadSave(
         @Part file: MultipartBody.Part,
-        @Part("rom_id") romId: RequestBody,
+        @Query("rom_id") romId: Int,
+        @Query("emulator") emulator: String? = null,
+        @Query("device_id") deviceId: String? = null,
+        @Query("overwrite") overwrite: Boolean = true,
     ): ResponseBody
 
     /**
@@ -95,6 +98,7 @@ interface RomMApiService {
     @GET("api/saves/{id}/content")
     suspend fun downloadSave(
         @Path("id") saveId: Int,
+        @Query("device_id") deviceId: String? = null,
     ): ResponseBody
 
     /**
@@ -103,7 +107,7 @@ interface RomMApiService {
      */
     @POST("api/sync/sessions/{session_id}/complete")
     suspend fun completeSession(
-        @Path("session_id") sessionId: String,
+        @Path("session_id") sessionId: Int,
         @Body request: SessionCompleteRequest,
     ): ResponseBody
 }
