@@ -38,6 +38,7 @@ class SyncCoordinator(
     private val romDao: RomDao,
     private val platformDao: es.davidrg.rommsync.data.local.dao.PlatformDao,
     private val cacheDir: File,
+    private val syncedHashStore: SyncedHashStore? = null,
 ) {
 
     suspend fun runSync(): SyncResult = withContext(Dispatchers.IO) {
@@ -130,7 +131,12 @@ class SyncCoordinator(
                     val handler = handlerByRom[op.romId]
                     if (save != null && handler != null) {
                         val ok = executeUpload(api, save, op.romId, deviceId, handler)
-                        if (ok) completed++ else failed++
+                        if (ok) {
+                            completed++
+                            syncedHashStore?.setSyncedHash(op.romId, save.fileName, save.sha1)
+                        } else {
+                            failed++
+                        }
                     } else {
                         failed++
                     }
@@ -150,7 +156,15 @@ class SyncCoordinator(
                             savesBasePath = effectiveBasePath,
                             handler = handler,
                         )
-                        if (ok) completed++ else failed++
+                        if (ok) {
+                            completed++
+                            // Tras un download exitoso, el hash local es el del servidor
+                            op.serverContentHash?.let { hash ->
+                                syncedHashStore?.setSyncedHash(op.romId, op.fileName, hash)
+                            }
+                        } else {
+                            failed++
+                        }
                     } else {
                         failed++
                     }
@@ -159,7 +173,13 @@ class SyncCoordinator(
                     conflicts.add("${op.fileName} (rom_id=${op.romId})")
                     Log.w(TAG, "Conflicto sin resolver: ${op.fileName} para rom ${op.romId}: ${op.reason}")
                 }
-                "no_op" -> { /* Ya sincronizado */ }
+                "no_op" -> {
+                    // Ya sincronizado: registrar hash local para que el preview sepa
+                    val save = localSavesMap[op.romId]?.find { it.fileName == op.fileName }
+                    if (save != null) {
+                        syncedHashStore?.setSyncedHash(op.romId, save.fileName, save.sha1)
+                    }
+                }
             }
         }
 

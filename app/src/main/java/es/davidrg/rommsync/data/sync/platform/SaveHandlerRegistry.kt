@@ -19,6 +19,7 @@ object SaveHandlerRegistry {
     private val switchHandler = SwitchSaveHandler()
     private val n3dsHandler = N3dsSaveHandler()
     private val cemuHandler = CemuSaveHandler()
+    private val androidHandler = AndroidSaveHandler()
 
     /**
      * Emuladores soportados con sus IDs para configuración por plataforma.
@@ -32,6 +33,7 @@ object SaveHandlerRegistry {
         EDEN("eden", "Eden"),
         AZAHAR("azahar", "Azahar"),
         CEMU("cemu", "Cemu"),
+        ANDROID_NATIVE("android_native", "Nativo Android"),
     }
 
     /**
@@ -48,6 +50,7 @@ object SaveHandlerRegistry {
             in N3DS_SLUGS -> listOf(EmulatorId.AZAHAR, EmulatorId.RETROARCH)
             in WIIU_SLUGS -> listOf(EmulatorId.CEMU)
             "switch" -> listOf(EmulatorId.EDEN)
+            in ANDROID_SLUGS -> listOf(EmulatorId.ANDROID_NATIVE)
             else -> listOf(EmulatorId.RETROARCH)
         }
     }
@@ -64,6 +67,7 @@ object SaveHandlerRegistry {
             in N3DS_SLUGS -> EmulatorId.AZAHAR
             in WIIU_SLUGS -> EmulatorId.CEMU
             "switch" -> EmulatorId.EDEN
+            in ANDROID_SLUGS -> EmulatorId.ANDROID_NATIVE
             else -> EmulatorId.RETROARCH
         }
     }
@@ -82,6 +86,7 @@ object SaveHandlerRegistry {
             EmulatorId.EDEN.id -> switchHandler
             EmulatorId.AZAHAR.id -> n3dsHandler
             EmulatorId.CEMU.id -> cemuHandler
+            EmulatorId.ANDROID_NATIVE.id -> androidHandler
             EmulatorId.RETROARCH.id -> retroArchHandler
             else -> retroArchHandler
         }
@@ -107,6 +112,7 @@ object SaveHandlerRegistry {
             EmulatorId.EDEN.id -> SwitchSaveHandler.DEFAULT_SAVES_PATH
             EmulatorId.AZAHAR.id -> N3dsSaveHandler.DEFAULT_SAVES_PATH
             EmulatorId.CEMU.id -> CemuSaveHandler.DEFAULT_SAVES_PATH
+            EmulatorId.ANDROID_NATIVE.id -> AndroidSaveHandler.DEFAULT_SAVES_PATH
             else -> retroArchBase
         }
     }
@@ -116,4 +122,7 @@ object SaveHandlerRegistry {
 
     /** Slugs de plataforma (ES-DE / RomM) que corresponden a Wii U. */
     private val WIIU_SLUGS = setOf("wiiu", "wii-u", "wii_u", "nintendo-wii-u")
+
+    /** Slugs de plataforma que corresponden a juegos nativos Android. */
+    private val ANDROID_SLUGS = setOf("android", "android-games")
 }

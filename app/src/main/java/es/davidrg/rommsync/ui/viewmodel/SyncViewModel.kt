@@ -5,11 +5,10 @@ import androidx.lifecycle.viewModelScope
 import es.davidrg.rommsync.data.local.SettingsDataStore
 import es.davidrg.rommsync.data.local.dao.PlatformDao
 import es.davidrg.rommsync.data.local.dao.RomDao
-import es.davidrg.rommsync.data.local.entity.DownloadedRomEntity
 import es.davidrg.rommsync.data.repository.SettingsRepository
 import es.davidrg.rommsync.data.sync.SaveSyncManager
 import es.davidrg.rommsync.data.sync.SyncState
-import es.davidrg.rommsync.data.sync.platform.LocalSave
+import es.davidrg.rommsync.data.sync.SyncedHashStore
 import es.davidrg.rommsync.data.sync.platform.SaveHandlerRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Modelo de datos para mostrar una partida local en la preview.
+ * Modelo de datos para mostrar una partida local con cambios pendientes.
  */
 data class SavePreviewItem(
     val romName: String,
@@ -35,6 +34,7 @@ class SyncViewModel(
     private val saveSyncManager: SaveSyncManager,
     private val romDao: RomDao,
     private val platformDao: PlatformDao,
+    private val syncedHashStore: SyncedHashStore,
 ) : ViewModel() {
 
     val retroArchBasePath: StateFlow<String> = settingsRepository.retroArchBasePath
@@ -57,10 +57,6 @@ class SyncViewModel(
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
-
-    init {
-        scanLocalSaves()
-    }
 
     fun setRetroArchBasePath(path: String) {
         viewModelScope.launch {
@@ -128,6 +124,9 @@ class SyncViewModel(
             )
 
             for (save in saves) {
+                // Solo mostrar saves con cambios pendientes
+                if (syncedHashStore.isAlreadySynced(rom.romId, save.fileName, save.sha1)) continue
+
                 results.add(
                     SavePreviewItem(
                         romName = rom.name,

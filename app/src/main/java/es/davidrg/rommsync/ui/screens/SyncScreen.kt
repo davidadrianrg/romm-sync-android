@@ -80,6 +80,7 @@ fun SyncScreen() {
                     saveSyncManager = container.saveSyncManager,
                     romDao = database.romDao(),
                     platformDao = database.platformDao(),
+                    syncedHashStore = es.davidrg.rommsync.data.sync.SyncedHashStore(context),
                 )
             }
         }
@@ -110,7 +111,6 @@ fun SyncScreen() {
         when (val s = syncState) {
             is SyncState.Success -> {
                 container.settingsRepository.setLastSync(System.currentTimeMillis(), s.message)
-                viewModel.scanLocalSaves()
             }
             is SyncState.Failed -> {
                 container.settingsRepository.setLastSync(System.currentTimeMillis(), "Error: ${s.message}")
@@ -288,11 +288,11 @@ fun SyncScreen() {
                 }
             }
 
-            // -- Preview de saves locales
+            // -- Preview de saves con cambios pendientes
             item {
                 SyncSection(
                     icon = Icons.Outlined.Info,
-                    title = "Saves locales detectados",
+                    title = "Cambios pendientes",
                 ) {
                     if (isScanning) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -302,55 +302,55 @@ fun SyncScreen() {
                             )
                             Spacer(modifier = Modifier.size(8.dp))
                             Text(
-                                "Escaneando...",
+                                "Comprobando saves...",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     } else if (localSaves.isEmpty()) {
                         Text(
-                            "No se encontraron saves locales para los ROMs descargados. " +
-                                "Descarga algún ROM y juega para generar archivos de guardado.",
+                            "Pulsa comprobar para ver si hay saves con cambios no sincronizados.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     } else {
                         Text(
-                            "${localSaves.size} archivo${if (localSaves.size != 1) "s" else ""} " +
-                                "de guardado encontrado${if (localSaves.size != 1) "s" else ""}",
+                            "${localSaves.size} save${if (localSaves.size != 1) "s" else ""} " +
+                                "con cambios pendientes",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "Estos archivos se compararán con el servidor al sincronizar.",
+                            "Se subirán al servidor en la próxima sincronización.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FilledTonalButton(
-                            onClick = { viewModel.scanLocalSaves() },
-                        ) {
-                            Icon(
-                                Icons.Outlined.Sync,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(modifier = Modifier.size(6.dp))
-                            Text("Reescanear")
-                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FilledTonalButton(
+                        onClick = { viewModel.scanLocalSaves() },
+                        enabled = !isScanning,
+                    ) {
+                        Icon(
+                            Icons.Outlined.Sync,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(modifier = Modifier.size(6.dp))
+                        Text("Comprobar")
                     }
                 }
             }
 
             // -- Lista de saves
             if (!isScanning && localSaves.isNotEmpty()) {
-                val grouped = localSaves.groupBy { "${it.platformSlug} - ${it.romName}" }
-                grouped.forEach { (groupKey, saves) ->
-                    item(key = "header_$groupKey") {
+                val grouped = localSaves.groupBy { it.platformSlug }
+                grouped.forEach { (platform, saves) ->
+                    item(key = "header_$platform") {
                         Text(
-                            groupKey,
+                            platform,
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(top = 4.dp),
@@ -359,7 +359,7 @@ fun SyncScreen() {
                     items(saves, key = { "${it.platformSlug}_${it.romName}_${it.fileName}" }) { save ->
                         SaveItemRow(save)
                     }
-                    item(key = "divider_$groupKey") {
+                    item(key = "divider_$platform") {
                         HorizontalDivider(
                             color = MaterialTheme.colorScheme.outlineVariant,
                             modifier = Modifier.padding(vertical = 4.dp),
@@ -504,16 +504,24 @@ private fun SaveItemRow(save: SavePreviewItem) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                save.fileName,
+                save.romName,
                 style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                save.fileName,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
         Text(
             formatTimestamp(save.lastModified),
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

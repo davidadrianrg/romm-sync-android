@@ -284,14 +284,50 @@ class RomRepository(
 
     /**
      * Busca en la carpeta de la plataforma un fichero (o carpeta, para ROMs
-     * multi-archivo) que coincida con el nombre esperado. La comparación es
-     * insensible a mayúsculas para tolerar diferencias al copiar desde PC.
+     * multi-archivo) que coincida con el ROM del servidor.
+     *
+     * Criterios de match (en orden de prioridad, el primero que acierte gana):
+     * 1. Nombre de fichero exacto (case-insensitive): rom.fileName
+     * 2. Nombre sin tags (region/revision): rom.fileNameNoTags + extensión
+     * 3. Nombre sin extensión: rom.fileNameNoExt + cualquier extensión válida
+     * 4. Nombre base del fichero local coincide con fileNameNoExt (sin tags ni ext)
      */
     private fun findRomFileOnDisk(romsRootPath: String, rom: Rom): File? {
         val platformDir = PathMapper.getPlatformDir(romsRootPath, rom.platformSlug)
         if (!platformDir.isDirectory) return null
         val entries = platformDir.listFiles() ?: return null
-        return entries.firstOrNull { it.name.equals(rom.fileName, ignoreCase = true) }
+        if (entries.isEmpty()) return null
+
+        // 1. Match exacto por fileName
+        entries.firstOrNull { it.name.equals(rom.fileName, ignoreCase = true) }
+            ?.let { return it }
+
+        // 2. Match por nombre sin tags + extensión original
+        val noTags = rom.fileNameNoTags
+        val ext = rom.fileExtension
+        if (!noTags.isNullOrBlank() && !ext.isNullOrBlank()) {
+            val candidate = "$noTags.$ext"
+            entries.firstOrNull { it.name.equals(candidate, ignoreCase = true) }
+                ?.let { return it }
+        }
+
+        // 3. Match por fileNameNoExt con cualquier extensión del mismo tipo
+        val noExt = rom.fileNameNoExt
+        if (!noExt.isNullOrBlank()) {
+            entries.firstOrNull { file ->
+                file.nameWithoutExtension.equals(noExt, ignoreCase = true)
+            }?.let { return it }
+        }
+
+        // 4. Match por nombre sin tags ni extensión contra el nombre base local
+        if (!noTags.isNullOrBlank()) {
+            val noTagsNoExt = noTags.substringBeforeLast('.').ifBlank { noTags }
+            entries.firstOrNull { file ->
+                file.nameWithoutExtension.equals(noTagsNoExt, ignoreCase = true)
+            }?.let { return it }
+        }
+
+        return null
     }
 
     // ── Configuración de sync por juego ─────────────────────────────────
