@@ -44,6 +44,7 @@ class SaveSyncWorker(
             romDao = database.romDao(),
             platformDao = database.platformDao(),
             cacheDir = applicationContext.cacheDir,
+            syncedHashStore = SyncedHashStore(applicationContext),
         )
 
         val result = coordinator.runSync()

@@ -6,7 +6,7 @@ Cliente de sincronización minimalista para servidores **RomM**. Aplicación And
 
 - **Descarga directa** de ROMs desde un servidor RomM a la estructura de carpetas de ES-DE
 - **Eliminación de descargas** que borra el ROM del disco y lo desmarca como descargado
-- **Sincronización bidireccional de saves** con el servidor (RetroArch, melonDS, PPSSPP, AetherSX2, Dolphin, Eden, Azahar y Cemu)
+- **Sincronización bidireccional de saves** con el servidor (RetroArch, melonDS, PPSSPP, AetherSX2, Dolphin, Eden, Azahar, Cemu y juegos nativos Android)
 - **Autenticación por API Key** (sin login OAuth/CSRF)
 - **Motor de descarga resilient** con WorkManager + CoroutineWorker
 - **Soporte mod_zip** para descargas dinámicas sin tamaño fijo
@@ -96,16 +96,22 @@ siguiendo el [Device Sync Protocol](https://docs.romm.app/latest/developers/devi
 | 3DS | Azahar | `{base}/{id0}/{id1}/title/{high}/{low}/data/` (carpeta zipeada) |
 | Wii U | Cemu | `{base}/{titleIdLow}/user/...` (carpeta zipeada) |
 | Switch | Eden | `{base}/nand/user/save/{userId}/{profileId}/{titleId}/` |
+| Android (nativo) | Nativo Android | Ruta configurable por juego (carpeta zipeada) |
 
 **Configuración:** desde la pestaña Plataformas, cada plataforma permite elegir
 emulador y una ruta de saves personalizada (override) que se selecciona con el
 explorador de archivos del sistema. La ruta base de RetroArch
 se configura en Configuración. La sincronización se dispara manualmente con el
 botón "Sincronizar ahora" y corre como `CoroutineWorker` con notificación
-foreground.
+foreground. La sección "Cambios pendientes" muestra solo saves que difieren del
+último estado sincronizado (comparación local por SHA-1).
 
 > ⚠️ Para PS2 se requiere activar **Folder Memory Card** en el emulador para
 > sincronizar por juego (en vez de una memory card monolítica de 8 MB).
+
+> ℹ️ Para juegos nativos Android, la ruta de saves debe configurarse
+> manualmente por juego (`savesPathOverride`) ya que cada app guarda en una
+> ubicación diferente. El handler zipea toda la carpeta indicada.
 
 ## 🏗️ Arquitectura
 
@@ -137,6 +143,7 @@ app/src/main/java/es/davidrg/rommsync/
 │   ├── SyncCoordinator.kt          # Orquesta negotiate → execute → complete
 │   ├── SaveSyncWorker.kt           # CoroutineWorker de sincronización
 │   ├── SaveSyncManager.kt          # API para la UI (trigger + estado)
+│   ├── SyncedHashStore.kt          # Cache local de hashes sincronizados
 │   └── platform/                   # Handlers por emulador (Strategy)
 │       ├── SaveHandler.kt          # Interfaz base + LocalSave
 │       ├── SaveHandlerRegistry.kt  # Selección de handler por plataforma/emulador
@@ -147,7 +154,8 @@ app/src/main/java/es/davidrg/rommsync/
 │       ├── DolphinSaveHandler.kt
 │       ├── N3dsSaveHandler.kt
 │       ├── CemuSaveHandler.kt
-│       └── SwitchSaveHandler.kt
+│       ├── SwitchSaveHandler.kt
+│       └── AndroidSaveHandler.kt
 ├── ui/
 │   ├── theme/                      # Material3 dark-first theme
 │   ├── navigation/                 # NavHost + bottom bar (4 tabs)
