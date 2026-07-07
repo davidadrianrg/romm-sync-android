@@ -107,6 +107,11 @@ class RomRepository(
         platformDao.updateSavesPathOverride(id, path)
     }
 
+    /** Persiste el aspect ratio medido a partir de covers reales de la plataforma. */
+    suspend fun updatePlatformMeasuredAspectRatio(id: Int, ratio: Float?) {
+        platformDao.updateMeasuredAspectRatio(id, ratio)
+    }
+
     // ── ROMs ───────────────────────────────────────────────────────────
 
     /**
@@ -357,6 +362,7 @@ class RomRepository(
         emulatorId = emulatorId,
         savesPathOverride = savesPathOverride,
         aspectRatio = aspectRatio,
+        measuredAspectRatio = measuredAspectRatio,
     )
 
     private fun RomDto.toDomain(): Rom {

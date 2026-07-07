@@ -16,7 +16,7 @@ import es.davidrg.rommsync.data.local.entity.PlatformEntity
         PlatformEntity::class,
         DownloadedRomEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class RomSyncDatabase : RoomDatabase() {
@@ -60,6 +60,15 @@ abstract class RomSyncDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Migration 5 → 6: añade el aspect ratio medido a partir de covers reales.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE platforms ADD COLUMN measuredAspectRatio REAL DEFAULT NULL")
+            }
+        }
+
         @Volatile
         private var INSTANCE: RomSyncDatabase? = null
 
@@ -70,7 +79,7 @@ abstract class RomSyncDatabase : RoomDatabase() {
                     RomSyncDatabase::class.java,
                     "romsync.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build()
                     .also { INSTANCE = it }

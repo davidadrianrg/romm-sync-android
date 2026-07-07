@@ -9,4 +9,5 @@ data class Platform(
     val emulatorId: String? = null,
     val savesPathOverride: String? = null,
     val aspectRatio: String? = null,
+    val measuredAspectRatio: Float? = null,
 )

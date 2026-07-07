@@ -108,7 +108,16 @@ fun LibraryScreen() {
 
     val viewModel: LibraryViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { LibraryViewModel(container.romRepository, container.downloadManager) }
+            initializer {
+                LibraryViewModel(
+                    romRepository = container.romRepository,
+                    downloadManager = container.downloadManager,
+                    aspectRatioCalculator = es.davidrg.rommsync.util.CoverAspectRatioCalculator(
+                        context = context.applicationContext,
+                        imageLoader = coil.Coil.imageLoader(context.applicationContext),
+                    ),
+                )
+            }
         }
     )
 
@@ -203,7 +212,22 @@ fun LibraryScreen() {
     // Aspect ratio de los covers segun la plataforma seleccionada
     val coverAspectRatio = remember(selectedPlatformId, platforms) {
         val platform = platforms.find { it.id == selectedPlatformId }
-        parseAspectRatio(platform?.aspectRatio)
+        platform?.measuredAspectRatio ?: parseAspectRatio(platform?.aspectRatio)
+    }
+
+    // Mide el aspect ratio real de los covers una vez por plataforma, reusando
+    // las carátulas ya cargadas en la rejilla.
+    LaunchedEffect(selectedPlatformId, romsWithStatus, platforms) {
+        val platformId = selectedPlatformId ?: return@LaunchedEffect
+        val platform = platforms.find { it.id == platformId } ?: return@LaunchedEffect
+        val coverUrls = romsWithStatus.mapNotNull {
+            it.rom.coverUrlLarge ?: it.rom.coverUrlSmall
+        }
+        viewModel.ensureAspectRatioMeasured(
+            platformId = platformId,
+            alreadyMeasured = platform.measuredAspectRatio != null,
+            coverUrls = coverUrls,
+        )
     }
 
     // ── Infinite scroll state ──────────────────────────────────────────

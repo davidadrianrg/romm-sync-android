@@ -16,4 +16,10 @@ data class PlatformEntity(
     val savesPathOverride: String? = null,
     /** Aspect ratio de los covers de esta plataforma (ej: "2 / 3", "3 / 4", "1 / 1"). */
     val aspectRatio: String? = null,
+    /**
+     * Aspect ratio (ancho/alto) medido a partir de las dimensiones reales de una
+     * muestra de covers de la plataforma. Null = aún no calculado. Tiene
+     * prioridad sobre [aspectRatio] (el valor del servidor no es fiable).
+     */
+    val measuredAspectRatio: Float? = null,
 )

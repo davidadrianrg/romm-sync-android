@@ -24,7 +24,40 @@ import kotlinx.coroutines.launch
 class LibraryViewModel(
     private val romRepository: RomRepository,
     private val downloadManager: DownloadManager? = null,
+    private val aspectRatioCalculator: es.davidrg.rommsync.util.CoverAspectRatioCalculator? = null,
 ) : ViewModel() {
+
+    /** Plataformas cuya medición de aspect ratio ya se ha lanzado en esta sesión. */
+    private val measuringPlatforms = mutableSetOf<Int>()
+
+    /**
+     * Mide y persiste el aspect ratio real de los covers de una plataforma si
+     * aún no se ha calculado. Reutiliza las URLs de cover ya cargadas en la
+     * rejilla, así que no genera peticiones extra de listado.
+     *
+     * @param platformId plataforma a medir.
+     * @param alreadyMeasured true si la plataforma ya tiene un ratio cacheado.
+     * @param coverUrls URLs de cover disponibles (de los ROMs ya cargados).
+     */
+    fun ensureAspectRatioMeasured(
+        platformId: Int,
+        alreadyMeasured: Boolean,
+        coverUrls: List<String>,
+    ) {
+        val calculator = aspectRatioCalculator ?: return
+        if (alreadyMeasured) return
+        if (coverUrls.isEmpty()) return
+        // Evita relanzar la medición mientras está en curso.
+        if (!measuringPlatforms.add(platformId)) return
+
+        viewModelScope.launch {
+            val ratio = calculator.measure(coverUrls)
+            if (ratio != null) {
+                romRepository.updatePlatformMeasuredAspectRatio(platformId, ratio)
+            }
+            measuringPlatforms.remove(platformId)
+        }
+    }
 
     private val _selectedPlatformId = MutableStateFlow<Int?>(null)
     val selectedPlatformId = _selectedPlatformId.asStateFlow()
