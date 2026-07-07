@@ -53,6 +53,9 @@ interface PlatformDao {
     @Query("UPDATE platforms SET savesPathOverride = :path WHERE id = :id")
     suspend fun updateSavesPathOverride(id: Int, path: String?)
 
+    @Query("UPDATE platforms SET measuredAspectRatio = :ratio WHERE id = :id")
+    suspend fun updateMeasuredAspectRatio(id: Int, ratio: Float?)
+
     @Query("SELECT COUNT(*) FROM platforms")
     suspend fun count(): Int
 
