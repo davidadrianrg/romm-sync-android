@@ -9,8 +9,10 @@ import es.davidrg.rommsync.data.remote.dto.NegotiateResponse
 import es.davidrg.rommsync.data.remote.dto.SessionCompleteRequest
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
@@ -54,7 +56,9 @@ interface RomMApiService {
     suspend fun downloadRom(
         @Path("id") romId: Int,
         @Path("file_name", encoded = true) fileName: String,
-    ): ResponseBody
+        /** Cabecera Range para reanudar descargas parciales (p.ej. "bytes=1048576-"). */
+        @Header("Range") range: String? = null,
+    ): Response<ResponseBody>
 
     // ── Save Sync endpoints ──────────────────────────────────────────────
 

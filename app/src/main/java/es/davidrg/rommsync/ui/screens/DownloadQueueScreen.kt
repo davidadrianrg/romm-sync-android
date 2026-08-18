@@ -222,12 +222,22 @@ private fun DownloadCard(
                                 .clip(RoundedCornerShape(3.dp)),
                         )
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            "${task.progress}%",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                task.byteDetail.ifEmpty { "${task.progress}%" },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                "${task.progress}%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 } else if (task.isCompleted) {
                     Spacer(modifier = Modifier.height(4.dp))

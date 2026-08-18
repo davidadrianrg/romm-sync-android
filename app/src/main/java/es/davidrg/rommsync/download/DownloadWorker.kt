@@ -25,6 +25,7 @@ import okhttp3.ResponseBody
 import retrofit2.HttpException
 import java.io.File
 import java.io.IOException
+import java.util.Locale
 import java.util.zip.ZipInputStream
 
 /**
@@ -140,7 +141,7 @@ class DownloadWorker(
             }
         } catch (e: IOException) {
             Log.w(TAG, "IO error downloading '$romName', attempt $runAttemptCount", e)
-            if (runAttemptCount < 5) Result.retry() else Result.failure(workDataOf(
+            if (runAttemptCount < 10) Result.retry() else Result.failure(workDataOf(
                 KEY_ROM_NAME to romName,
                 KEY_FILE_NAME to fileName,
                 KEY_PLATFORM_SLUG to platformSlug,
@@ -169,6 +170,10 @@ class DownloadWorker(
      *      from scratch.
      * 3. If `Content-Length == -1` and the response is 200 (not 206), treat as
      *    mod_zip stream and extract on the fly.
+     *
+     * On network failure the partial file is **always kept** (fresh and resume
+     * mode alike) so the next attempt continues from the largest offset —
+     * critical for multi-GB ROMs over unstable Wi-Fi.
      */
     private suspend fun performDownload(
         apiService: RomMApiService,
@@ -178,18 +183,39 @@ class DownloadWorker(
         romId: Int,
         romName: String,
     ): Result {
-        val response = apiService.downloadRom(romId, fileName)
-        val contentLength = response.contentLength()
         val targetFile = PathMapper.getRomFile(romsRootPath, platformSlug, fileName)
 
+        // Offset de reanudación: tamaño del parcial si existe y es plausible
+        val partialBytes = if (targetFile.exists()) targetFile.length() else 0L
+        val rangeHeader = if (partialBytes > 0L) "bytes=$partialBytes-" else null
+
+        val response = apiService.downloadRom(romId, fileName, rangeHeader)
+        val contentLength = response.body()?.contentLength() ?: -1L
+        val isPartialResponse = response.code() == 206
+
         return try {
-            if (contentLength <= 0L) {
-                // mod_zip: Content-Length = -1
-                reportProgress(0, true, romId, romName, fileName, platformSlug)
-                extractZipStream(response, romsRootPath, platformSlug)
-            } else {
-                streamToDisk(response, targetFile, contentLength, 0L,
-                    romId, romName, fileName, platformSlug)
+            when {
+                response.code() == 416 -> {
+                    // El local ya tiene todos los bytes que el servidor ofrece
+                    Log.i(TAG, "Server says 416 — local file already complete ($partialBytes bytes)")
+                }
+                contentLength <= 0L && response.code() == 200 -> {
+                    // mod_zip: Content-Length = -1, stream comprimido al vuelo
+                    reportProgress(0, true, romId, romName, fileName, platformSlug)
+                    extractZipStream(response.body()!!, romsRootPath, platformSlug)
+                }
+                else -> {
+                    val body = response.body() ?: throw IOException("Respuesta sin cuerpo (HTTP ${response.code()})")
+                    // Total esperado: bytes ya en disco + los que faltan (206)
+                    // o Content-Length completo (200).
+                    val offset = if (isPartialResponse) partialBytes else 0L
+                    val totalBytes = if (isPartialResponse) partialBytes + contentLength else contentLength
+                    if (isPartialResponse) {
+                        Log.i(TAG, "Resuming '$romName' at $partialBytes bytes ($contentLength remaining)")
+                    }
+                    streamToDisk(body, targetFile, totalBytes, offset,
+                        romId, romName, fileName, platformSlug)
+                }
             }
 
             // Persist download record in Room so UI shows the checkmark
@@ -216,7 +242,8 @@ class DownloadWorker(
             // Defensive close: streamToDisk / extractZipStream already close
             // the underlying InputStream via `use {}`, but ensure the body is
             // released even on early exceptions.
-            runCatching { response.close() }
+            runCatching { response.body()?.close() }
+            runCatching { response.raw().close() }
         }
     }
 
@@ -224,6 +251,10 @@ class DownloadWorker(
      * Builds progress Data with ALL metadata fields so that DownloadManager can
      * read rom info from WorkInfo.progress without relying on inputData.
      * Also updates the foreground notification with current progress.
+     *
+     * @param downloadedBytes bytes ya escritos en disco (incluye offset de resume)
+     * @param totalBytes tamaño total esperado del fichero
+     * @param speedBps velocidad de transferencia en bytes/segundo
      */
     private suspend fun reportProgress(
         progress: Int,
@@ -232,6 +263,9 @@ class DownloadWorker(
         romName: String,
         fileName: String,
         platformSlug: String,
+        downloadedBytes: Long = 0L,
+        totalBytes: Long = 0L,
+        speedBps: Long = 0L,
     ) {
         setProgress(workDataOf(
             KEY_PROGRESS to progress,
@@ -240,11 +274,14 @@ class DownloadWorker(
             KEY_ROM_NAME to romName,
             KEY_FILE_NAME to fileName,
             KEY_PLATFORM_SLUG to platformSlug,
+            KEY_DOWNLOADED_BYTES to downloadedBytes,
+            KEY_TOTAL_BYTES to totalBytes,
+            KEY_SPEED_BPS to speedBps,
         ))
 
         // Update foreground notification with progress
         try {
-            val foreInfo = createForegroundInfo(romName, progress, indeterminate)
+            val foreInfo = createForegroundInfo(romName, progress, indeterminate, downloadedBytes, totalBytes, speedBps)
             setForeground(foreInfo)
         } catch (e: Exception) {
             // Notification permission may have been revoked mid-download
@@ -252,17 +289,35 @@ class DownloadWorker(
     }
 
     /**
-     * Creates the [ForegroundInfo] with a notification showing download progress.
+     * Creates the [ForegroundInfo] with a notification showing download
+     * progress, downloaded/total MB and transfer speed.
      */
     private fun createForegroundInfo(
         romName: String,
         progress: Int,
         indeterminate: Boolean,
+        downloadedBytes: Long = 0L,
+        totalBytes: Long = 0L,
+        speedBps: Long = 0L,
     ): ForegroundInfo {
+        val detail = buildString {
+            if (totalBytes > 0L) {
+                append(formatBytes(downloadedBytes))
+                append(" / ")
+                append(formatBytes(totalBytes))
+                if (speedBps > 0L) {
+                    append(" · ")
+                    append(formatSpeed(speedBps))
+                }
+            }
+        }.ifEmpty { "Descargando…" }
+
         val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Descargando $romName")
+            .setContentText(detail)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .apply {
                 if (indeterminate || progress == 0) {
                     setProgress(0, 0, true) // indeterminate
@@ -282,6 +337,24 @@ class DownloadWorker(
         } else {
             ForegroundInfo(NOTIFICATION_ID, notification)
         }
+    }
+
+    /** 1536 B → "1.5 KB"; 5 GB ROMs → "4.7 GB" */
+    private fun formatBytes(bytes: Long): String {
+        val kb = bytes / 1024.0
+        val mb = kb / 1024.0
+        val gb = mb / 1024.0
+        return when {
+            gb >= 1.0 -> String.format(Locale.US, "%.1f GB", gb)
+            mb >= 1.0 -> String.format(Locale.US, "%.1f MB", mb)
+            kb >= 1.0 -> String.format(Locale.US, "%.0f KB", kb)
+            else -> "$bytes B"
+        }
+    }
+
+    /** 1_500_000 B/s → "1.4 MB/s" */
+    private fun formatSpeed(bytesPerSecond: Long): String {
+        return formatBytes(bytesPerSecond) + "/s"
     }
 
     /**
@@ -309,11 +382,11 @@ class DownloadWorker(
      * and the offset is added to the byte count when computing progress so the
      * progress bar reflects the whole file, not just the resumed chunk.
      *
-     * On failure:
-     * - In resume mode the partial file is **kept** so the next attempt can
-     *   continue from a larger offset.
-     * - In fresh-download mode the partial file is **deleted** to avoid mixing
-     *   half-written data with a future retry.
+     * Progress reporting includes downloaded/total bytes and transfer speed,
+     * shown both in the UI (WorkInfo.progress) and the foreground notification.
+     *
+     * On failure the partial file is **kept** in every mode so the next
+     * attempt resumes from the largest offset reached.
      */
     private suspend fun streamToDisk(
         body: ResponseBody,
@@ -333,6 +406,9 @@ class DownloadWorker(
             val buffer = ByteArray(64 * 1024)
             var bytesDownloaded = 0L
             var lastReportedProgress = -1
+            var lastReportTime = System.currentTimeMillis()
+            var lastReportBytes = 0L
+            var speedBps = 0L
 
             while (true) {
                 val read = input.read(buffer)
@@ -340,18 +416,35 @@ class DownloadWorker(
                 output.write(buffer, 0, read)
                 bytesDownloaded = bytesDownloaded + read.toLong()
 
+                val now = System.currentTimeMillis()
                 if (totalBytes > 0L) {
-                    val progress = ((offset + bytesDownloaded) * 100 / totalBytes).toInt()
-                    if (progress - lastReportedProgress >= 2 || progress >= 100) {
+                    val progress = (((offset + bytesDownloaded) * 100 / totalBytes)).toInt()
+                    // Reportar como muy cada 2% o cada 800ms (para velocidad estable)
+                    if (progress - lastReportedProgress >= 2 || now - lastReportTime >= 800) {
+                        if (now - lastReportTime > 0) {
+                            speedBps = (bytesDownloaded - lastReportBytes) * 1000 / (now - lastReportTime)
+                        }
                         lastReportedProgress = progress
-                        reportProgress(progress, false, romId, romName, fileName, platformSlug)
+                        lastReportTime = now
+                        lastReportBytes = bytesDownloaded
+                        reportProgress(
+                            progress, false, romId, romName, fileName, platformSlug,
+                            downloadedBytes = offset + bytesDownloaded,
+                            totalBytes = totalBytes,
+                            speedBps = speedBps,
+                        )
                     }
                 }
             }
+            // Reporte final (100%) con bytes totales
+            reportProgress(
+                100, false, romId, romName, fileName, platformSlug,
+                downloadedBytes = totalBytes,
+                totalBytes = totalBytes,
+                speedBps = speedBps,
+            )
         } catch (e: Exception) {
-            if (offset == 0L && targetFile.exists()) {
-                targetFile.delete()
-            }
+            // Se conserva SIEMPRE el parcial para reanudar en el próximo intento
             throw e
         } finally {
             try { input?.close() } catch (_: Exception) {}
@@ -425,6 +518,9 @@ class DownloadWorker(
         const val KEY_INDETERMINATE = "indeterminate"
         const val KEY_LOCAL_PATH = "local_path"
         const val KEY_ERROR_MESSAGE = "error_message"
+        const val KEY_DOWNLOADED_BYTES = "downloaded_bytes"
+        const val KEY_TOTAL_BYTES = "total_bytes"
+        const val KEY_SPEED_BPS = "speed_bps"
 
         const val BUFFER_SIZE = 64 * 1024 // 64KB
 

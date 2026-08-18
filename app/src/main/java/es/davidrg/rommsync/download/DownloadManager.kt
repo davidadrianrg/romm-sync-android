@@ -159,6 +159,9 @@ class DownloadManager(private val context: Context) {
             isCompleted = state == WorkInfo.State.SUCCEEDED,
             isFailed = state == WorkInfo.State.FAILED,
             errorMessage = outputData.getString(DownloadWorker.KEY_ERROR_MESSAGE),
+            downloadedBytes = progressData.getLong(DownloadWorker.KEY_DOWNLOADED_BYTES, 0L),
+            totalBytes = progressData.getLong(DownloadWorker.KEY_TOTAL_BYTES, 0L),
+            speedBps = progressData.getLong(DownloadWorker.KEY_SPEED_BPS, 0L),
         )
     }
 

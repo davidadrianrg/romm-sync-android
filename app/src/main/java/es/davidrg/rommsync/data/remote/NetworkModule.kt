@@ -33,7 +33,7 @@ object NetworkModule {
             .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS) // Long for large downloads
+            .readTimeout(10, TimeUnit.MINUTES) // Large ROMs can stall on slow Wi-Fi
             .writeTimeout(30, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build()
