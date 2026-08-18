@@ -35,6 +35,7 @@ class AndroidSaveHandler : SaveHandler {
         romFileName: String,
         platformSlug: String,
         savesBasePath: String,
+        romLocalPath: String?,
     ): List<LocalSave> = withContext(Dispatchers.IO) {
         val saveDir = File(savesBasePath)
         if (!saveDir.isDirectory) return@withContext emptyList()

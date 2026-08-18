@@ -45,6 +45,7 @@ class SettingsDataStore(private val context: Context) {
         val SAVE_SYNC_ENABLED = stringPreferencesKey("save_sync_enabled")
         val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
         val LAST_SYNC_SUMMARY = stringPreferencesKey("last_sync_summary")
+        val LAST_SYNC_CONFLICTS_JSON = stringPreferencesKey("last_sync_conflicts_json")
         val SAVE_SYNC_INTERVAL_MINUTES = intPreferencesKey("save_sync_interval_minutes")
         val ESDE_DATA_DIR = stringPreferencesKey("esde_data_dir")
         val RETROHRAI_MEDIA_PATH = stringPreferencesKey("retrohrai_media_path")
@@ -137,6 +138,9 @@ class SettingsDataStore(private val context: Context) {
     val lastSyncSummary: Flow<String> = context.dataStore.data.map {
         it[LAST_SYNC_SUMMARY] ?: ""
     }
+    val lastSyncConflictsJson: Flow<String> = context.dataStore.data.map {
+        it[LAST_SYNC_CONFLICTS_JSON] ?: "[]"
+    }
     val esdeDataDir: Flow<String> = context.dataStore.data.map {
         it[ESDE_DATA_DIR] ?: DEFAULT_ESDE_DATA_DIR
     }
@@ -198,6 +202,19 @@ class SettingsDataStore(private val context: Context) {
             it[LAST_SYNC_SUMMARY] = summary
         }
     }
+
+    /**
+     * Persiste los conflictos pendientes como JSON para que la UI de
+     * resolución sobreviva a reinicios de app/proceso.
+     */
+    suspend fun setLastSyncConflictsJson(json: String) {
+        context.dataStore.edit { it[LAST_SYNC_CONFLICTS_JSON] = json }
+    }
+
+    fun getLastSyncConflictsJsonBlocking(): String =
+        runBlocking {
+            context.dataStore.data.first()[LAST_SYNC_CONFLICTS_JSON] ?: "[]"
+        }
 
     suspend fun setSaveSyncEnabled(enabled: Boolean) {
         context.dataStore.edit { it[SAVE_SYNC_ENABLED] = if (enabled) "true" else "false" }

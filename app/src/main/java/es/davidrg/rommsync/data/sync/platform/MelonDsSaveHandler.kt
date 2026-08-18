@@ -24,6 +24,7 @@ class MelonDsSaveHandler : SaveHandler {
         romFileName: String,
         platformSlug: String,
         savesBasePath: String,
+        romLocalPath: String?,
     ): List<LocalSave> = withContext(Dispatchers.IO) {
         val results = mutableListOf<LocalSave>()
         val romBaseName = romFileName.substringBeforeLast('.')

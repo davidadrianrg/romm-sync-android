@@ -146,38 +146,11 @@ fun DownloadQueueScreen() {
 
 @Composable
 private fun EmptyDownloads(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(96.dp)
-                .background(
-                    MaterialTheme.colorScheme.surfaceContainerHigh,
-                    CircleShape,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Outlined.CloudDownload,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Spacer(modifier = Modifier.height(20.dp))
-        Text(
-            "No hay descargas en cola",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            "Las ROMs que descargues aparecerán aquí",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        es.davidrg.rommsync.ui.components.EmptyState(
+            icon = Icons.Outlined.CloudDownload,
+            title = "No hay descargas en cola",
+            description = "Las ROMs que descargues aparecerán aquí",
         )
     }
 }

@@ -47,6 +47,20 @@ class SaveSyncWorker(
             syncedHashStore = SyncedHashStore(applicationContext),
         )
 
+        // Modo resolución de conflicto único (disparado desde la UI de conflictos)
+        val conflictRomId = inputData.getInt(KEY_CONFLICT_ROM_ID, -1)
+        val conflictFileName = inputData.getString(KEY_CONFLICT_FILE_NAME)
+        val conflictResolution = inputData.getString(KEY_CONFLICT_RESOLUTION)
+        if (conflictRomId >= 0 && !conflictFileName.isNullOrBlank() && !conflictResolution.isNullOrBlank()) {
+            val result = coordinator.runConflictResolution(conflictRomId, conflictFileName, conflictResolution)
+            return@withContext if (result.isSuccess) {
+                Result.success(workDataOf(KEY_MESSAGE to (result.message ?: "Conflicto resuelto")))
+            } else {
+                if (runAttemptCount < 3) Result.retry()
+                else Result.failure(workDataOf(KEY_MESSAGE to (result.error ?: "Error desconocido")))
+            }
+        }
+
         val result = coordinator.runSync()
 
         if (result.isSuccess) {
@@ -56,6 +70,7 @@ class SaveSyncWorker(
                 KEY_UPLOADED to result.uploaded,
                 KEY_DOWNLOADED to result.downloaded,
                 KEY_CONFLICTS to result.conflicts,
+                KEY_CONFLICTS_JSON to serializeConflicts(result.conflictDetails),
             ))
         } else {
             Log.w(TAG, "Sync failed: ${result.error}")
@@ -105,12 +120,35 @@ class SaveSyncWorker(
     companion object {
         const val TAG = "SaveSyncWorker"
         const val WORK_NAME = "save_sync"
+        const val CONFLICT_WORK_NAME = "save_sync_conflict"
         const val KEY_MESSAGE = "sync_message"
         const val KEY_UPLOADED = "sync_uploaded"
         const val KEY_DOWNLOADED = "sync_downloaded"
         const val KEY_CONFLICTS = "sync_conflicts"
+        const val KEY_CONFLICTS_JSON = "sync_conflicts_json"
+        const val KEY_CONFLICT_ROM_ID = "conflict_rom_id"
+        const val KEY_CONFLICT_FILE_NAME = "conflict_file_name"
+        const val KEY_CONFLICT_RESOLUTION = "conflict_resolution"
 
         private const val CHANNEL_ID = "save_sync"
         private const val NOTIFICATION_ID = 2001
+
+        /** Adaptador Moshi para serializar conflictos en el WorkInfo output. */
+        private val conflictsAdapter by lazy {
+            val moshi = com.squareup.moshi.Moshi.Builder()
+                .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
+                .build()
+            moshi.adapter<List<ConflictInfo>>(
+                com.squareup.moshi.Types.newParameterizedType(
+                    List::class.java, ConflictInfo::class.java,
+                ),
+            )
+        }
+
+        private fun serializeConflicts(conflicts: List<ConflictInfo>): String = try {
+            conflictsAdapter.toJson(conflicts)
+        } catch (_: Exception) {
+            "[]"
+        }
     }
 }

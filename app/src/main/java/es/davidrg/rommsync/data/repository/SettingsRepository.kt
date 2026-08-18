@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.Flow
  * Wrapper around SettingsDataStore for clean access from ViewModels.
  */
 class SettingsRepository(private val dataStore: SettingsDataStore) {
-
     val settings: Flow<ServerConfig> = dataStore.settings
 
     suspend fun setServerUrl(url: String) = dataStore.setServerUrl(url)
@@ -23,11 +22,14 @@ class SettingsRepository(private val dataStore: SettingsDataStore) {
     val saveSyncIntervalMinutes: Flow<Int> = dataStore.saveSyncIntervalMinutes
     val lastSyncTimestamp: Flow<Long> = dataStore.lastSyncTimestamp
     val lastSyncSummary: Flow<String> = dataStore.lastSyncSummary
+    val lastSyncConflictsJson: Flow<String> = dataStore.lastSyncConflictsJson
     val esdeDataDir: Flow<String> = dataStore.esdeDataDir
     val retroHraiMediaPath: Flow<String> = dataStore.retroHraiMediaPath
 
     suspend fun setLastSync(timestamp: Long, summary: String) =
         dataStore.setLastSync(timestamp, summary)
+    suspend fun setLastSyncConflicts(json: String) =
+        dataStore.setLastSyncConflictsJson(json)
     suspend fun setSaveSyncIntervalMinutes(minutes: Int) =
         dataStore.setSaveSyncIntervalMinutes(minutes)
     suspend fun setEsdeDataDir(path: String) = dataStore.setEsdeDataDir(path)

@@ -34,6 +34,7 @@ class CemuSaveHandler : SaveHandler {
         romFileName: String,
         platformSlug: String,
         savesBasePath: String,
+        romLocalPath: String?,
     ): List<LocalSave> = withContext(Dispatchers.IO) {
         val results = mutableListOf<LocalSave>()
         val titleId = extractTitleId(romFileName) ?: return@withContext results

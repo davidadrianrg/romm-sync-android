@@ -3,6 +3,7 @@ package es.davidrg.rommsync.data.sync
 import android.content.Context
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
+import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -10,6 +11,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import es.davidrg.rommsync.data.local.SettingsDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.util.concurrent.TimeUnit
@@ -41,6 +43,37 @@ class SaveSyncManager(private val context: Context) {
         workManager.enqueueUniqueWork(
             SaveSyncWorker.WORK_NAME,
             ExistingWorkPolicy.KEEP,
+            request,
+        )
+    }
+
+    /**
+     * Resuelve un conflicto forzando la dirección elegida por el usuario.
+     *
+     * @param resolution "local" para subir la versión local sobrescribiendo
+     *   el servidor, "server" para descargar la del servidor sobrescribiendo
+     *   la local.
+     */
+    fun triggerConflictResolution(romId: Int, fileName: String, resolution: String) {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val request = OneTimeWorkRequestBuilder<SaveSyncWorker>()
+            .setConstraints(constraints)
+            .setInputData(
+                Data.Builder()
+                    .putInt(SaveSyncWorker.KEY_CONFLICT_ROM_ID, romId)
+                    .putString(SaveSyncWorker.KEY_CONFLICT_FILE_NAME, fileName)
+                    .putString(SaveSyncWorker.KEY_CONFLICT_RESOLUTION, resolution)
+                    .build(),
+            )
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .build()
+
+        workManager.enqueueUniqueWork(
+            SaveSyncWorker.CONFLICT_WORK_NAME,
+            ExistingWorkPolicy.REPLACE,
             request,
         )
     }
@@ -79,6 +112,9 @@ class SaveSyncManager(private val context: Context) {
 
     /**
      * Observa el estado del worker de sync para actualizar la UI.
+     *
+     * Cuando el ciclo termina con éxito, persiste también el JSON de
+     * conflictos detectados para que la UI de resolución los cargue.
      */
     fun observeSyncState(): Flow<SyncState> {
         return workManager.getWorkInfosForUniqueWorkFlow(SaveSyncWorker.WORK_NAME).map { infos ->
@@ -87,6 +123,12 @@ class SaveSyncManager(private val context: Context) {
                 WorkInfo.State.RUNNING -> SyncState.Running
                 WorkInfo.State.SUCCEEDED -> {
                     val message = info.outputData.getString(SaveSyncWorker.KEY_MESSAGE) ?: ""
+                    val conflictsJson = info.outputData.getString(SaveSyncWorker.KEY_CONFLICTS_JSON)
+                    if (conflictsJson != null) {
+                        kotlinx.coroutines.runBlocking {
+                            SettingsDataStore(context).setLastSyncConflictsJson(conflictsJson)
+                        }
+                    }
                     SyncState.Success(message)
                 }
                 WorkInfo.State.FAILED -> {

@@ -14,9 +14,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Storage
@@ -55,6 +58,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import es.davidrg.rommsync.RomMSyncApplication
 import es.davidrg.rommsync.data.local.SettingsDataStore
+import es.davidrg.rommsync.data.sync.ConflictInfo
 import es.davidrg.rommsync.data.sync.SyncState
 import es.davidrg.rommsync.ui.components.FolderPickerDialog
 import es.davidrg.rommsync.ui.viewmodel.SavePreviewItem
@@ -96,6 +100,8 @@ fun SyncScreen() {
     val syncInterval by viewModel.syncIntervalMinutes.collectAsState()
     val localSaves by viewModel.localSaves.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
+    val conflicts by viewModel.conflicts.collectAsState()
+    val resolvingConflict by viewModel.resolvingConflict.collectAsState()
 
     var retroArchPath by remember { mutableStateOf("") }
     var showFolderPicker by remember { mutableStateOf(false) }
@@ -139,6 +145,19 @@ fun SyncScreen() {
         ) {
             // -- Estado actual
             item { StatusCard(syncState, lastTimestamp, lastSummary) }
+
+            // -- Conflictos pendientes de resolución
+            if (conflicts.isNotEmpty()) {
+                item(key = "conflicts_section") {
+                    ConflictSection(
+                        conflicts = conflicts,
+                        resolvingKey = resolvingConflict,
+                        onResolve = { romId, fileName, resolution ->
+                            viewModel.resolveConflict(romId, fileName, resolution)
+                        },
+                    )
+                }
+            }
 
             // -- Boton de sincronizar
             item {
@@ -561,6 +580,138 @@ private fun SyncSection(
     }
 }
 
+/**
+ * Sección de conflictos detectados en el último sync. Cada conflicto ofrece
+ * dos acciones explícitas: mantener la versión local (subirla) o restaurar
+ * la versión del servidor (descargarla).
+ */
+@Composable
+private fun ConflictSection(
+    conflicts: List<ConflictInfo>,
+    resolvingKey: String?,
+    onResolve: (romId: Int, fileName: String, resolution: String) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.size(10.dp))
+                Text(
+                    "Conflictos (${conflicts.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "El mismo save cambió en este dispositivo y en el servidor. " +
+                    "Elige qué versión conservar:",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            conflicts.forEach { conflict ->
+                ConflictItemRow(
+                    conflict = conflict,
+                    isResolving = resolvingKey == "${conflict.romId}_${conflict.fileName}",
+                    onResolve = onResolve,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConflictItemRow(
+    conflict: ConflictInfo,
+    isResolving: Boolean,
+    onResolve: (romId: Int, fileName: String, resolution: String) -> Unit,
+) {
+    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Text(
+            conflict.romName,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            buildString {
+                append(conflict.fileName)
+                conflict.serverUpdatedAt?.let {
+                    append("  ·  Servidor: ")
+                    append(formatServerTimestamp(it))
+                }
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilledTonalButton(
+                onClick = { onResolve(conflict.romId, conflict.fileName, "local") },
+                enabled = !isResolving,
+                modifier = Modifier.weight(1f),
+            ) {
+                if (isResolving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(
+                        Icons.Filled.CloudUpload,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.size(6.dp))
+                Text("Local", maxLines = 1)
+            }
+            FilledTonalButton(
+                onClick = { onResolve(conflict.romId, conflict.fileName, "server") },
+                enabled = !isResolving,
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(
+                    Icons.Filled.CloudDownload,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(modifier = Modifier.size(6.dp))
+                Text("Servidor", maxLines = 1)
+            }
+        }
+    }
+}
+
+/** Formatea un timestamp ISO del servidor ("2026-08-17T14:23:00Z") legible. */
+private fun formatServerTimestamp(iso: String): String = try {
+    val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+    val date = sdf.parse(iso.take(19))
+    val output = SimpleDateFormat("d MMM HH:mm", Locale.getDefault())
+    date?.let { output.format(it) } ?: iso.take(16)
+} catch (_: Exception) {
+    iso.take(16)
+}
 @Composable
 private fun parseSyncResult(message: String): Quad<ImageVector, androidx.compose.ui.graphics.Color, String, String> {
     return if (message.contains("Todo sincronizado", ignoreCase = true)) {

@@ -1,5 +1,6 @@
 package es.davidrg.rommsync.data.sync.platform
 
+import es.davidrg.rommsync.util.RomHeaderIdReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -41,9 +42,14 @@ class DolphinSaveHandler : SaveHandler {
         romFileName: String,
         platformSlug: String,
         savesBasePath: String,
+        romLocalPath: String?,
     ): List<LocalSave> = withContext(Dispatchers.IO) {
         val results = mutableListOf<LocalSave>()
-        val gameId = extractGameId(romFileName) ?: return@withContext results
+        // Game ID: primero desde el header del disco (GC 0x0440 / Wii 0x0000),
+        // luego desde el nombre del fichero.
+        val gameId = romLocalPath?.let { RomHeaderIdReader.readGameId(File(it), platformSlug) }
+            ?: extractGameId(romFileName)
+        if (gameId == null) return@withContext results
 
         if (platformSlug.lowercase() in GC_SLUGS) {
             findGcSaves(romId, gameId, savesBasePath, results)

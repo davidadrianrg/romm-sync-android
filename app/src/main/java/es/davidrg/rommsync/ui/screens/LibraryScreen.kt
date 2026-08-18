@@ -34,6 +34,9 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.DownloadDone
+import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -449,20 +452,36 @@ fun LibraryScreen() {
 
             // ── Empty state ─────────────────────────────────────────────
             if (filteredRoms.isEmpty() && !isLoading && !isLoadingMore) {
+                val (icon, title, message) = when {
+                    searchQuery.isNotBlank() -> Triple(
+                        Icons.Filled.Search,
+                        "Sin resultados",
+                        "No hay juegos que coincidan con \"$searchQuery\"",
+                    )
+                    selectedFilter == RomFilter.MISSING -> Triple(
+                        Icons.Outlined.DownloadDone,
+                        "Todo descargado",
+                        "Todos los juegos de esta plataforma ya están en el dispositivo",
+                    )
+                    selectedFilter == RomFilter.DOWNLOADED -> Triple(
+                        Icons.Outlined.Download,
+                        "Sin descargas",
+                        "Aún no hay juegos descargados de esta plataforma",
+                    )
+                    else -> Triple(
+                        Icons.Outlined.SportsEsports,
+                        "Sin juegos",
+                        "No hay juegos disponibles para esta plataforma",
+                    )
+                }
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    val emptyMessage = when {
-                        searchQuery.isNotBlank() -> "No hay juegos que coincidan con la búsqueda"
-                        selectedFilter == RomFilter.MISSING -> "Todos los juegos están descargados"
-                        selectedFilter == RomFilter.DOWNLOADED -> "Aún no hay juegos descargados"
-                        else -> "No hay juegos para esta plataforma"
-                    }
-                    Text(
-                        emptyMessage,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    es.davidrg.rommsync.ui.components.EmptyState(
+                        icon = icon,
+                        title = title,
+                        description = message,
                     )
                 }
                 return@Column

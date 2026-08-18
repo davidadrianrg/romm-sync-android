@@ -1,5 +1,6 @@
 package es.davidrg.rommsync.data.sync.platform
 
+import es.davidrg.rommsync.util.RomHeaderIdReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -31,13 +32,16 @@ class PpssppSaveHandler : SaveHandler {
         romFileName: String,
         platformSlug: String,
         savesBasePath: String,
+        romLocalPath: String?,
     ): List<LocalSave> = withContext(Dispatchers.IO) {
         val results = mutableListOf<LocalSave>()
         val saveDataDir = File(savesBasePath)
         if (!saveDataDir.isDirectory) return@withContext results
 
-        // Intentar buscar por disc-id si el filename tiene formato conocido
-        val discId = extractDiscIdFromFileName(romFileName)
+        // Intentar buscar por disc-id: primero leyendo el header del ISO si
+        // está disponible, luego desde el nombre del fichero.
+        val discId = romLocalPath?.let { RomHeaderIdReader.readGameId(File(it), platformSlug) }
+            ?: extractDiscIdFromFileName(romFileName)
         if (discId == null) return@withContext results
 
         val matchedFolders = saveDataDir.listFiles()?.filter { dir ->

@@ -121,9 +121,10 @@ fun PlatformsScreen() {
                 .padding(horizontal = 16.dp),
         ) {
             if (!settings.isConfigured) {
-                EmptyState(
+                es.davidrg.rommsync.ui.components.EmptyState(
+                    icon = Icons.Outlined.Storage,
                     title = "Sin servidor configurado",
-                    subtitle = "Configura el servidor en la pestaña Configuración para ver tus plataformas.",
+                    description = "Configura el servidor en la pestaña Configuración para ver tus plataformas.",
                 )
                 return@Column
             }
@@ -501,42 +502,5 @@ private fun PlatformCard(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun EmptyState(title: String, subtitle: String) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(96.dp)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Outlined.Storage,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Spacer(modifier = Modifier.height(20.dp))
-        Text(
-            title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 32.dp),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        )
     }
 }

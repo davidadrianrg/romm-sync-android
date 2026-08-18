@@ -85,6 +85,7 @@ class SyncCoordinator(
                 romFileName = rom.fileName,
                 platformSlug = rom.platformSlug,
                 savesBasePath = effectiveBasePath,
+                romLocalPath = rom.localPath,
             )
             if (saves.isNotEmpty()) {
                 localSavesMap[rom.romId] = saves
@@ -122,7 +123,7 @@ class SyncCoordinator(
         // 4. Ejecutar operaciones
         var completed = 0
         var failed = 0
-        val conflicts = mutableListOf<String>()
+        val conflicts = mutableListOf<es.davidrg.rommsync.data.remote.dto.SyncOperation>()
 
         for (op in negotiateResponse.operations) {
             when (op.action) {
@@ -170,7 +171,7 @@ class SyncCoordinator(
                     }
                 }
                 "conflict" -> {
-                    conflicts.add("${op.fileName} (rom_id=${op.romId})")
+                    conflicts.add(op)
                     Log.w(TAG, "Conflicto sin resolver: ${op.fileName} para rom ${op.romId}: ${op.reason}")
                 }
                 "no_op" -> {
@@ -200,8 +201,135 @@ class SyncCoordinator(
             uploaded = negotiateResponse.operations.count { it.action == "upload" },
             downloaded = negotiateResponse.operations.count { it.action == "download" },
             conflicts = conflicts.size,
+            conflictDetails = conflicts.map { op ->
+                ConflictInfo(
+                    romId = op.romId,
+                    romName = downloadedRoms.find { it.romId == op.romId }?.name ?: "rom ${op.romId}",
+                    fileName = op.fileName,
+                    serverUpdatedAt = op.serverUpdatedAt,
+                    reason = op.reason,
+                    saveId = op.saveId,
+                )
+            },
             message = buildResultMessage(completed, failed, conflicts.size),
         )
+    }
+
+    /**
+     * Resuelve un conflicto pendiente forzando la dirección elegida por el
+     * usuario:
+     * - "local": sube la versión local con overwrite (gana este dispositivo).
+     * - "server": negocia para obtener el saveId y descarga la versión del
+     *   servidor sobrescribiendo la local.
+     *
+     * @return mensaje descriptivo del resultado.
+     */
+    suspend fun runConflictResolution(
+        romId: Int,
+        fileName: String,
+        resolution: String,
+    ): SyncResult = withContext(Dispatchers.IO) {
+        val serverUrl = settingsDataStore.getServerUrlBlocking()
+        val apiKey = settingsDataStore.getApiKeyBlocking()
+        val retroArchBase = settingsDataStore.getRetroArchBasePathBlocking()
+
+        if (serverUrl.isEmpty() || apiKey.isEmpty()) {
+            return@withContext SyncResult(error = "Servidor no configurado")
+        }
+
+        val api = NetworkModule.createApiService(serverUrl, apiKey)
+        val deviceId = ensureDeviceRegistered(api)
+            ?: return@withContext SyncResult(error = "No se pudo registrar el dispositivo")
+
+        val rom = romDao.getAllDownloadedRomsBlocking().find { it.romId == romId }
+            ?: return@withContext SyncResult(error = "ROM $romId no está descargado en este dispositivo")
+
+        val config = platformDao.getAllPlatformsBlocking().find { it.slug == rom.platformSlug }
+        val handler = SaveHandlerRegistry.getHandler(
+            platformSlug = rom.platformSlug,
+            emulatorId = config?.emulatorId,
+        )
+        val effectiveBasePath = resolveSavesBasePath(rom, config, retroArchBase)
+
+        when (resolution) {
+            "local" -> {
+                val saves = handler.findSaves(
+                    romId = rom.romId,
+                    romFileName = rom.fileName,
+                    platformSlug = rom.platformSlug,
+                    savesBasePath = effectiveBasePath,
+                    romLocalPath = rom.localPath,
+                )
+                val save = saves.find { it.fileName == fileName }
+                    ?: return@withContext SyncResult(error = "No se encontró el save local $fileName")
+
+                val ok = executeUpload(api, save, rom.romId, deviceId, handler)
+                if (ok) {
+                    syncedHashStore?.setSyncedHash(rom.romId, save.fileName, save.sha1)
+                    SyncResult(uploaded = 1, message = "Versión local subida: $fileName")
+                } else {
+                    SyncResult(error = "Fallo al subir $fileName")
+                }
+            }
+            "server" -> {
+                // Negociar para descubrir el saveId del servidor para este save
+                val localSaves = handler.findSaves(
+                    romId = rom.romId,
+                    romFileName = rom.fileName,
+                    platformSlug = rom.platformSlug,
+                    savesBasePath = effectiveBasePath,
+                    romLocalPath = rom.localPath,
+                )
+                val clientSaves = localSaves.map { save ->
+                    ClientSaveState(
+                        romId = rom.romId,
+                        fileName = save.fileName,
+                        contentHash = save.sha1,
+                        updatedAt = formatIso8601(save.lastModified),
+                        fileSizeBytes = save.file.length().toInt(),
+                    )
+                }
+                val negotiateResponse = try {
+                    api.negotiateSync(NegotiateRequest(deviceId = deviceId, saves = clientSaves))
+                } catch (e: Exception) {
+                    return@withContext SyncResult(error = "Error en negociación: ${e.message}")
+                }
+
+                val op = negotiateResponse.operations.find {
+                    it.romId == rom.romId && it.fileName == fileName
+                } ?: return@withContext SyncResult(
+                    error = "El servidor ya no reporta operaciones para $fileName",
+                )
+
+                val saveId = op.saveId
+                    ?: return@withContext SyncResult(error = "El servidor no devolvió saveId para $fileName")
+
+                val ok = executeDownload(
+                    api = api,
+                    saveId = saveId,
+                    deviceId = deviceId,
+                    rom = rom,
+                    fileName = fileName,
+                    savesBasePath = effectiveBasePath,
+                    handler = handler,
+                )
+                if (ok) {
+                    op.serverContentHash?.let { hash ->
+                        syncedHashStore?.setSyncedHash(rom.romId, fileName, hash)
+                    }
+                    try {
+                        api.completeSession(
+                            sessionId = negotiateResponse.sessionId,
+                            request = SessionCompleteRequest(operationsCompleted = 1),
+                        )
+                    } catch (_: Exception) {}
+                    SyncResult(downloaded = 1, message = "Versión del servidor restaurada: $fileName")
+                } else {
+                    SyncResult(error = "Fallo al descargar $fileName")
+                }
+            }
+            else -> SyncResult(error = "Resolución desconocida: $resolution")
+        }
     }
 
     private fun resolveSavesBasePath(
@@ -322,8 +450,23 @@ data class SyncResult(
     val uploaded: Int = 0,
     val downloaded: Int = 0,
     val conflicts: Int = 0,
+    val conflictDetails: List<ConflictInfo> = emptyList(),
     val message: String? = null,
     val error: String? = null,
 ) {
     val isSuccess: Boolean get() = error == null
 }
+
+/**
+ * Detalle de un conflicto detectado durante la negociación: la copia local
+ * y la del servidor difieren y ambas son más recientes que la última
+ * sincronización conocida.
+ */
+data class ConflictInfo(
+    val romId: Int,
+    val romName: String,
+    val fileName: String,
+    val serverUpdatedAt: String?,
+    val reason: String?,
+    val saveId: Int?,
+)

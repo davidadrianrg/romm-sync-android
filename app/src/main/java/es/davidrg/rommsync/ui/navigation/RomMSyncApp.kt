@@ -1,5 +1,10 @@
 package es.davidrg.rommsync.ui.navigation
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
@@ -98,6 +103,10 @@ fun RomMSyncApp() {
             // First launch → Config for onboarding; otherwise → Library (home)
             startDestination = if (needsOnboarding) Screen.Config.route else Screen.Library.route,
             modifier = Modifier.padding(innerPadding),
+            enterTransition = { fadeIn(tween(220)) + slideInHorizontally(tween(220)) { it / 8 } },
+            exitTransition = { fadeOut(tween(180)) },
+            popEnterTransition = { fadeIn(tween(220)) },
+            popExitTransition = { fadeOut(tween(180)) + slideOutHorizontally(tween(220)) { it / 8 } },
         ) {
             composable(Screen.Library.route) { LibraryScreen() }
             composable(Screen.Platforms.route) { PlatformsScreen() }

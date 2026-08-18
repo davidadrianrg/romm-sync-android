@@ -1,5 +1,6 @@
 package es.davidrg.rommsync.data.sync.platform
 
+import es.davidrg.rommsync.util.RomHeaderIdReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -33,12 +34,16 @@ class Ps2SaveHandler : SaveHandler {
         romFileName: String,
         platformSlug: String,
         savesBasePath: String,
+        romLocalPath: String?,
     ): List<LocalSave> = withContext(Dispatchers.IO) {
         val results = mutableListOf<LocalSave>()
         val memcardsDir = File(savesBasePath)
         if (!memcardsDir.isDirectory) return@withContext results
 
-        val serial = extractSerialFromFileName(romFileName) ?: return@withContext results
+        // Serial: primero desde el header del ISO, luego desde el nombre.
+        val serial = romLocalPath?.let { RomHeaderIdReader.readGameId(File(it), platformSlug) }
+            ?: extractSerialFromFileName(romFileName)
+        if (serial == null) return@withContext results
         val baSerial = toBaFolderName(serial)
 
         // Buscar en todas las memory cards (.ps2 dirs)

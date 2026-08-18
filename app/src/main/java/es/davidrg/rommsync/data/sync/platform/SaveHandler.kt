@@ -28,6 +28,10 @@ interface SaveHandler {
      * @param romFileName Nombre del fichero ROM (con extensión).
      * @param platformSlug Slug de la plataforma (estilo ES-DE: gba, snes, etc.).
      * @param savesBasePath Ruta base donde buscar saves.
+     * @param romLocalPath Ruta local del ROM en disco (opcional). Si se
+     *   proporciona, los handlers que soportan extracción de ID por header
+     *   binario (PSP/PS2/GC/Wii) la usarán para leer el ID real del juego en
+     *   lugar de inferirlo del nombre del fichero.
      * @return Lista de saves encontrados.
      */
     suspend fun findSaves(
@@ -35,6 +39,7 @@ interface SaveHandler {
         romFileName: String,
         platformSlug: String,
         savesBasePath: String,
+        romLocalPath: String? = null,
     ): List<LocalSave>
 
     /**
