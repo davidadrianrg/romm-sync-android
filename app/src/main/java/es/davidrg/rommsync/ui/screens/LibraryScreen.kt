@@ -16,11 +16,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -75,6 +75,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -88,7 +89,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.compose.foundation.Image
 import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import es.davidrg.rommsync.RomMSyncApplication
 import es.davidrg.rommsync.domain.model.DownloadStatus
@@ -234,7 +237,9 @@ fun LibraryScreen() {
     }
 
     // ── Infinite scroll state ──────────────────────────────────────────
-    val gridState = rememberLazyGridState()
+    // Staggered grid: cada item mide su propia imagen, así que el grid no puede
+    // asumir un alto fijo por item. Usamos el layoutInfo del staggered grid.
+    val gridState = rememberLazyStaggeredGridState()
     val isLoadingMore by viewModel.isLoadingMore.collectAsState()
     val hasMore by viewModel.hasMore.collectAsState()
 
@@ -496,12 +501,12 @@ fun LibraryScreen() {
                 },
                 modifier = Modifier.fillMaxSize(),
             ) {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = minCardSize),
+                LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Adaptive(minSize = minCardSize),
                     state = gridState,
                     modifier = Modifier.fillMaxSize(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalItemSpacing = 8.dp,
                     contentPadding = PaddingValues(vertical = 8.dp),
                 ) {
                     items(filteredRoms, key = { it.rom.id }) { romStatus ->
@@ -522,7 +527,7 @@ fun LibraryScreen() {
                     }
                     // Loading more footer
                     if (isLoadingMore) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
+                        item(span = StaggeredGridItemSpan.FullLine) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -685,10 +690,26 @@ private fun RomCard(
     val context = LocalContext.current
     val coverUrl = romWithStatus.rom.coverUrlLarge ?: romWithStatus.rom.coverUrlSmall
 
+    // El painter expone el tamaño intrínseco de la imagen una vez decodificada:
+    // cada card adopta la proporción REAL de su cover (masonry), con la mediana
+    // de la plataforma como placeholder mientras carga o si la decodificación falla.
+    val painter = rememberAsyncImagePainter(
+        model = ImageRequest.Builder(context)
+            .data(coverUrl)
+            .crossfade(true)
+            .build(),
+    )
+    val intrinsic = painter.intrinsicSize
+    val cardAspectRatio = if (intrinsic != Size.Unspecified && intrinsic.width > 0f && intrinsic.height > 0f) {
+        intrinsic.width / intrinsic.height
+    } else {
+        coverAspectRatio
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(coverAspectRatio)
+            .aspectRatio(cardAspectRatio)
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .combinedClickable(
@@ -697,11 +718,8 @@ private fun RomCard(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        AsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(coverUrl)
-                .crossfade(true)
-                .build(),
+        Image(
+            painter = painter,
             contentDescription = romWithStatus.rom.name,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
