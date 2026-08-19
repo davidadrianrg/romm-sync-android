@@ -65,6 +65,7 @@ class SaveSyncWorker(
 
         if (result.isSuccess) {
             Log.i(TAG, "Sync completed: ${result.message}")
+            notifySyncResult(success = true, message = result.message ?: "Sincronización completada", conflicts = result.conflicts)
             Result.success(workDataOf(
                 KEY_MESSAGE to (result.message ?: "Sincronización completada"),
                 KEY_UPLOADED to result.uploaded,
@@ -117,11 +118,37 @@ class SaveSyncWorker(
         }
     }
 
+    /**
+     * Notifica el resultado final del sync cuando la app está en segundo
+     * plano. Solo si hubo actividad (uploads/downloads/conflictos) o error:
+     * un "todo al día" silencioso no merece interrumpir.
+     */
+    private fun notifySyncResult(success: Boolean, message: String, conflicts: Int) {
+        val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE)
+            as NotificationManager
+        val quiet = success && message.contains("nada que sincronizar", ignoreCase = true)
+        if (quiet) return
+
+        val title = when {
+            !success -> "Sync de saves falló"
+            conflicts > 0 -> "Sync terminó con $conflicts conflicto(s)"
+            else -> "Saves sincronizados"
+        }
+        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setAutoCancel(true)
+            .build()
+        runCatching { manager.notify(SYNC_RESULT_NOTIFICATION_ID, notification) }
+    }
+
     companion object {
         const val TAG = "SaveSyncWorker"
         const val WORK_NAME = "save_sync"
         const val CONFLICT_WORK_NAME = "save_sync_conflict"
         const val KEY_MESSAGE = "sync_message"
+        private const val SYNC_RESULT_NOTIFICATION_ID = 4202
         const val KEY_UPLOADED = "sync_uploaded"
         const val KEY_DOWNLOADED = "sync_downloaded"
         const val KEY_CONFLICTS = "sync_conflicts"

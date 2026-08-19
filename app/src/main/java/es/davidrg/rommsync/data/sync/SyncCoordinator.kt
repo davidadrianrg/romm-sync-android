@@ -80,6 +80,24 @@ class SyncCoordinator(
             handlerByRom[rom.romId] = handler
 
             val effectiveBasePath = resolveSavesBasePath(rom, config, retroArchBase)
+
+            // ── Atajo por fingerprint: si los saves no cambiaron desde el
+            // último sync, saltarse el zipeo+hash completo de este ROM. ──
+            val cachedFp = syncedHashStore?.getFingerprint(rom.romId)
+            if (cachedFp != null) {
+                val currentFp = handler.savesFingerprint(
+                    romId = rom.romId,
+                    romFileName = rom.fileName,
+                    platformSlug = rom.platformSlug,
+                    savesBasePath = effectiveBasePath,
+                    romLocalPath = rom.localPath,
+                )
+                if (currentFp != null && currentFp == cachedFp) {
+                    Log.d(TAG, "Skipping unchanged saves for '${rom.name}' (fingerprint hit)")
+                    continue
+                }
+            }
+
             val saves = handler.findSaves(
                 romId = rom.romId,
                 romFileName = rom.fileName,
@@ -123,6 +141,7 @@ class SyncCoordinator(
         // 4. Ejecutar operaciones
         var completed = 0
         var failed = 0
+        val failedRomIds = mutableSetOf<Int>()
         val conflicts = mutableListOf<es.davidrg.rommsync.data.remote.dto.SyncOperation>()
 
         for (op in negotiateResponse.operations) {
@@ -137,9 +156,11 @@ class SyncCoordinator(
                             syncedHashStore?.setSyncedHash(op.romId, save.fileName, save.sha1)
                         } else {
                             failed++
+                            failedRomIds.add(op.romId)
                         }
                     } else {
                         failed++
+                        failedRomIds.add(op.romId)
                     }
                 }
                 "download" -> {
@@ -165,9 +186,11 @@ class SyncCoordinator(
                             }
                         } else {
                             failed++
+                            failedRomIds.add(op.romId)
                         }
                     } else {
                         failed++
+                        failedRomIds.add(op.romId)
                     }
                 }
                 "conflict" -> {
@@ -195,6 +218,24 @@ class SyncCoordinator(
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to complete session", e)
+        }
+
+        // 6. Sellar fingerprints de los ROMs cuyo sync terminó sin fallos:
+        // en el próximo ciclo, si el save no cambió, se saltará el zipeo.
+        for (rom in downloadedRoms) {
+            if (failed == 0 || rom.romId !in failedRomIds) {
+                val handler = handlerByRom[rom.romId] ?: continue
+                val config = platformConfigs[rom.platformSlug]
+                val effectiveBasePath = resolveSavesBasePath(rom, config, retroArchBase)
+                val fp = handler.savesFingerprint(
+                    romId = rom.romId,
+                    romFileName = rom.fileName,
+                    platformSlug = rom.platformSlug,
+                    savesBasePath = effectiveBasePath,
+                    romLocalPath = rom.localPath,
+                )
+                if (fp != null) syncedHashStore?.setFingerprint(rom.romId, fp)
+            }
         }
 
         SyncResult(

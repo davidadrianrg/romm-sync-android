@@ -17,7 +17,7 @@ class CoverAspectRatioCalculatorTest {
     @Test
     fun `median of even list averages the two middle elements`() {
         val result = CoverAspectRatioCalculator.median(listOf(0.6f, 0.8f))
-        assertThat(result).isEqualTo(0.7f)
+        assertThat(result).isWithin(0.0001f).of(0.7f)
     }
 
     @Test
@@ -28,12 +28,12 @@ class CoverAspectRatioCalculatorTest {
 
     @Test
     fun `median is robust to a single outlier`() {
-        // Cuatro covers ~2:3 (0.667) y una apaisada atípica (1.5): la mediana
-        // se mantiene cerca del valor real de la plataforma.
+        // Cuatro covers ~2:3 (0.667) y una apaisada atípica (1.5): con 5
+        // elementos la mediana es el 3º ordenado (0.667), no el outlier.
         val result = CoverAspectRatioCalculator.median(
-            listOf(0.66f, 0.67f, 0.667f, 0.68f, 1.5f),
+            listOf(0.66f, 0.665f, 0.667f, 0.68f, 1.5f),
         )
-        assertThat(result).isEqualTo(0.667f)
+        assertThat(result).isWithin(0.001f).of(0.667f)
     }
 
     @Test

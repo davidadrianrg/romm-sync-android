@@ -12,6 +12,7 @@ import androidx.work.workDataOf
 import es.davidrg.rommsync.domain.model.DownloadTask
 import es.davidrg.rommsync.domain.model.Rom
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.util.concurrent.TimeUnit
 
@@ -42,10 +43,18 @@ class DownloadManager(private val context: Context) {
             .putInt(DownloadWorker.KEY_PLATFORM_ID, rom.platformId)
             .putString(DownloadWorker.KEY_PLATFORM_SLUG, rom.platformSlug)
             .putString(DownloadWorker.KEY_SERVER_URL, serverUrl)
+            .putString(DownloadWorker.KEY_FILE_HASH, rom.files.firstOrNull()?.hash)
             .build()
 
+        // "Solo WiFi": UNMETERED evita datos móviles; saves siempre CONNECTED
+        val wifiOnly = runCatching {
+            kotlinx.coroutines.runBlocking {
+                es.davidrg.rommsync.data.local.SettingsDataStore(context)
+                    .settings.first()
+            }.wifiOnlyDownloads
+        }.getOrDefault(false)
         val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
             .build()
 
         val request = OneTimeWorkRequestBuilder<DownloadWorker>()
@@ -110,8 +119,15 @@ class DownloadManager(private val context: Context) {
             .putString(DownloadWorker.KEY_PLATFORM_SLUG, platformSlug)
             .build()
 
+        // "Solo WiFi": UNMETERED evita datos móviles; saves siempre CONNECTED
+        val wifiOnly = runCatching {
+            kotlinx.coroutines.runBlocking {
+                es.davidrg.rommsync.data.local.SettingsDataStore(context)
+                    .settings.first()
+            }.wifiOnlyDownloads
+        }.getOrDefault(false)
         val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
             .build()
 
         val request = OneTimeWorkRequestBuilder<DownloadWorker>()

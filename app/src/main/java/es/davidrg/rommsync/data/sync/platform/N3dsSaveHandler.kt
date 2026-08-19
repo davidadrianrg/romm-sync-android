@@ -66,6 +66,16 @@ class N3dsSaveHandler : SaveHandler {
 
     override suspend fun prepareForUpload(save: LocalSave): File = save.file
 
+    override suspend fun savesFingerprint(
+        romId: Int, romFileName: String, platformSlug: String,
+        savesBasePath: String, romLocalPath: String?,
+    ): String? = withContext(Dispatchers.IO) {
+        val titleId = extractTitleId(romFileName) ?: return@withContext null
+        val dataDir = findDataDir(savesBasePath, titleId.take(8), titleId.takeLast(8))
+            ?: return@withContext null
+        folderFingerprint(dataDir)
+    }
+
     override suspend fun extractDownload(
         tempFile: File,
         romFileName: String,

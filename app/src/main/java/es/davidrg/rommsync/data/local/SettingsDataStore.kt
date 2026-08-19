@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -39,6 +40,7 @@ class SettingsDataStore(private val context: Context) {
         val SERVER_URL = stringPreferencesKey("server_url")
         val ROMS_ROOT_PATH = stringPreferencesKey("roms_root_path")
         val MAX_CONCURRENT_DOWNLOADS = intPreferencesKey("max_concurrent_downloads")
+        val WIFI_ONLY_DOWNLOADS = booleanPreferencesKey("wifi_only_downloads")
         val RETROARCH_BASE_PATH = stringPreferencesKey("retroarch_base_path")
         val DEVICE_ID = intPreferencesKey("sync_device_id")
         val DEVICE_ID_STRING = stringPreferencesKey("sync_device_id_string")
@@ -158,6 +160,7 @@ class SettingsDataStore(private val context: Context) {
             apiKey = apiKey,
             romsRootPath = prefs[ROMS_ROOT_PATH] ?: DEFAULT_ROMS_PATH,
             maxConcurrentDownloads = prefs[MAX_CONCURRENT_DOWNLOADS] ?: DEFAULT_MAX_DOWNLOADS,
+            wifiOnlyDownloads = prefs[WIFI_ONLY_DOWNLOADS] ?: false,
         )
     }
 
@@ -182,6 +185,10 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun setMaxConcurrentDownloads(max: Int) {
         context.dataStore.edit { it[MAX_CONCURRENT_DOWNLOADS] = max.coerceIn(1, 5) }
+    }
+
+    suspend fun setWifiOnlyDownloads(enabled: Boolean) {
+        context.dataStore.edit { it[WIFI_ONLY_DOWNLOADS] = enabled }
     }
 
     suspend fun setRetroArchBasePath(path: String) {
@@ -321,6 +328,8 @@ data class ServerConfig(
     val apiKey: String,
     val romsRootPath: String,
     val maxConcurrentDownloads: Int,
+    /** Descargar ROMs solo por WiFi (saves se sincronizan por cualquier red). */
+    val wifiOnlyDownloads: Boolean = false,
 ) {
     val isConfigured: Boolean get() = serverUrl.isNotEmpty() && apiKey.isNotEmpty()
 }

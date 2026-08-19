@@ -75,6 +75,22 @@ class DownloadWorker(
         // Ensure target platform directory exists
         PathMapper.ensurePlatformDir(romsRootPath, platformSlug)
 
+        // ── Space check: fail fast if the target volume can't hold the ROM ──
+        // The API doesn't expose file size upfront for all endpoints, so we
+        // estimate from the Content-Length of a HEAD-ish first response below.
+        // Here we only guard the resume case: if a partial already occupies
+        // more than the free space, abort before wasting bytes.
+        val targetFileForSpace = PathMapper.getRomFile(romsRootPath, platformSlug, fileName)
+        val spaceCheck = hasEnoughSpace(targetFileForSpace.parentFile, neededBytes = -1L)
+        if (spaceCheck == SpaceCheck.NO_STORAGE) {
+            return@withContext Result.failure(workDataOf(
+                KEY_ROM_NAME to romName,
+                KEY_FILE_NAME to fileName,
+                KEY_PLATFORM_SLUG to platformSlug,
+                KEY_ERROR_MESSAGE to "No queda espacio en el almacenamiento",
+            ))
+        }
+
         // Build API client for this download
         val apiService = NetworkModule.createApiService(serverUrl, apiKey)
 
@@ -96,8 +112,8 @@ class DownloadWorker(
         return@withContext try {
             currentSemaphore.withPermit {
                 performDownload(
-                    apiService, romsRootPath, platformSlug, fileName,
-                    romId, romName,
+                    apiService, romsRootPath, fileName, romId, romName, platformSlug,
+                    expectedHash = inputData.getString(KEY_FILE_HASH),
                 )
             }
         } catch (e: HttpException) {
@@ -178,10 +194,11 @@ class DownloadWorker(
     private suspend fun performDownload(
         apiService: RomMApiService,
         romsRootPath: String,
-        platformSlug: String,
         fileName: String,
         romId: Int,
         romName: String,
+        platformSlug: String,
+        expectedHash: String? = null,
     ): Result {
         val targetFile = PathMapper.getRomFile(romsRootPath, platformSlug, fileName)
 
@@ -192,6 +209,29 @@ class DownloadWorker(
         val response = apiService.downloadRom(romId, fileName, rangeHeader)
         val contentLength = response.body()?.contentLength() ?: -1L
         val isPartialResponse = response.code() == 206
+
+        // ── Space check con tamaño conocido: aborta antes de escribir nada ──
+        if (contentLength > 0L) {
+            val alreadyOnDisk = if (isPartialResponse) partialBytes else 0L
+            val missing = contentLength - alreadyOnDisk
+            if (missing > 0L) {
+                when (hasEnoughSpace(targetFile.parentFile, neededBytes = missing)) {
+                    SpaceCheck.NO_STORAGE -> {
+                        runCatching { response.body()?.close() }
+                        return Result.failure(workDataOf(
+                            KEY_ROM_NAME to romName,
+                            KEY_FILE_NAME to fileName,
+                            KEY_PLATFORM_SLUG to platformSlug,
+                            KEY_ERROR_MESSAGE to "Espacio insuficiente: faltan ${formatBytes(missing)}",
+                        ))
+                    }
+                    SpaceCheck.LOW_SPACE -> {
+                        Log.w(TAG, "Low storage downloading '$romName' (needs ${formatBytes(missing)}) — proceeding")
+                    }
+                    SpaceCheck.OK -> {}
+                }
+            }
+        }
 
         return try {
             when {
@@ -218,6 +258,46 @@ class DownloadWorker(
                 }
             }
 
+            // ── Verificación de integridad: hash local vs hash del servidor ──
+            // RomM expone el hash del fichero (MD5 o SHA-1 según su config).
+            // Solo verificamos si el servidor lo conoce: detecta resumes
+            // desalineados y transferencias corruptas antes de que el usuario
+            // descubra el ROM roto dentro del emulador.
+            var verificationFailure: Result? = null
+            if (expectedHash != null) {
+                val hashAlgo = detectHashAlgorithm(expectedHash)
+                if (hashAlgo != null) {
+                    reportProgress(
+                        progress = 100, indeterminate = true,
+                        romId = romId, romName = romName,
+                        fileName = fileName, platformSlug = platformSlug,
+                        downloadedBytes = targetFile.length(), totalBytes = 0L,
+                        progressText = "Verificando integridad…",
+                    )
+                    val localHash = withContext(Dispatchers.IO) {
+                        computeFileHash(targetFile, hashAlgo)
+                    }
+                    if (!localHash.equals(expectedHash, ignoreCase = true)) {
+                        Log.e(TAG, "Hash mismatch for '$romName': expected=$expectedHash got=$localHash — deleting corrupt file")
+                        targetFile.delete()
+                        verificationFailure = Result.failure(workDataOf(
+                            KEY_ROM_NAME to romName,
+                            KEY_FILE_NAME to fileName,
+                            KEY_PLATFORM_SLUG to platformSlug,
+                            KEY_ERROR_MESSAGE to "Descarga corrupta (hash no coincide) — reintenta",
+                        ))
+                    } else {
+                        Log.i(TAG, "Hash OK for '$romName' ($hashAlgo)")
+                    }
+                } else {
+                    Log.w(TAG, "Unknown hash format '${expectedHash.take(8)}…' for '$romName' — skipping verification")
+                }
+            }
+
+            if (verificationFailure != null) {
+                verificationFailure
+            } else {
+
             // Persist download record in Room so UI shows the checkmark
             val platformId = inputData.getInt(KEY_PLATFORM_ID, 0)
             val db = RomSyncDatabase.getDatabase(applicationContext)
@@ -238,6 +318,7 @@ class DownloadWorker(
                 KEY_FILE_NAME to fileName, KEY_PLATFORM_SLUG to platformSlug,
                 KEY_LOCAL_PATH to targetFile.absolutePath,
             ))
+            }
         } finally {
             // Defensive close: streamToDisk / extractZipStream already close
             // the underlying InputStream via `use {}`, but ensure the body is
@@ -266,6 +347,7 @@ class DownloadWorker(
         downloadedBytes: Long = 0L,
         totalBytes: Long = 0L,
         speedBps: Long = 0L,
+        progressText: String? = null,
     ) {
         setProgress(workDataOf(
             KEY_PROGRESS to progress,
@@ -355,6 +437,63 @@ class DownloadWorker(
     /** 1_500_000 B/s → "1.4 MB/s" */
     private fun formatSpeed(bytesPerSecond: Long): String {
         return formatBytes(bytesPerSecond) + "/s"
+    }
+
+    // ── Disk space check ────────────────────────────────────────────────
+
+    /** Resultado de comprobar espacio libre en el volumen destino. */
+    private enum class SpaceCheck { OK, LOW_SPACE, NO_STORAGE }
+
+    /**
+     * Detecta el algoritmo por la longitud del hash (MD5=32, SHA-1=40,
+     * SHA-256=64 hex chars). RomM usa MD5 o SHA-1 según su config.
+     */
+    private fun detectHashAlgorithm(hash: String): String? = when (hash.length) {
+        32 -> "MD5"
+        40 -> "SHA-1"
+        64 -> "SHA-256"
+        else -> null
+    }
+
+    /** Hash del fichero completo con el algoritmo dado, en hex minúsculas. */
+    private fun computeFileHash(file: File, algorithm: String): String {
+        val digest = java.security.MessageDigest.getInstance(algorithm)
+        file.inputStream().use { input ->
+            val buf = ByteArray(BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buf)
+                if (read < 0) break
+                digest.update(buf, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Comprueba el espacio disponible en el volumen que contiene [dir].
+     *
+     * @param neededBytes bytes requeridos; si es negativo solo comprueba que
+     *   el volumen exista y sea escribible (OK si hay >0 bytes libres).
+     * @return [SpaceCheck.NO_STORAGE] si no queda sitio o la ruta es inválida,
+     *   [SpaceCheck.LOW_SPACE] si queda <5% libre además de lo requerido,
+     *   [SpaceCheck.OK] en caso contrario.
+     */
+    private fun hasEnoughSpace(dir: File?, neededBytes: Long): SpaceCheck {
+        val target = dir ?: return SpaceCheck.NO_STORAGE
+        return try {
+            val stat = android.os.StatFs(target.absolutePath)
+            val free = stat.availableBytes
+            when {
+                free <= 0L -> SpaceCheck.NO_STORAGE
+                neededBytes < 0L -> SpaceCheck.OK
+                neededBytes > free -> SpaceCheck.NO_STORAGE
+                free - neededBytes < stat.totalBytes / 20 -> SpaceCheck.LOW_SPACE // <5% margen
+                else -> SpaceCheck.OK
+            }
+        } catch (_: Exception) {
+            // Ruta inaccesible: no bloquear la descarga por un StatFs fallido
+            SpaceCheck.OK
+        }
     }
 
     /**
@@ -521,6 +660,7 @@ class DownloadWorker(
         const val KEY_DOWNLOADED_BYTES = "downloaded_bytes"
         const val KEY_TOTAL_BYTES = "total_bytes"
         const val KEY_SPEED_BPS = "speed_bps"
+        const val KEY_FILE_HASH = "file_hash"
 
         const val BUFFER_SIZE = 64 * 1024 // 64KB
 

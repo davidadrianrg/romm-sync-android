@@ -70,6 +70,18 @@ class PpssppSaveHandler : SaveHandler {
 
     override suspend fun prepareForUpload(save: LocalSave): File = save.file
 
+    override suspend fun savesFingerprint(
+        romId: Int, romFileName: String, platformSlug: String,
+        savesBasePath: String, romLocalPath: String?,
+    ): String? = withContext(Dispatchers.IO) {
+        val discId = romLocalPath?.let { RomHeaderIdReader.readGameId(File(it), platformSlug) }
+            ?: extractDiscIdFromFileName(romFileName) ?: return@withContext null
+        val matched = File(savesBasePath).listFiles()?.filter {
+            it.isDirectory && it.name.startsWith(discId, ignoreCase = true)
+        } ?: return@withContext null
+        matched.joinToString("|") { folderFingerprint(it) ?: "" }.ifEmpty { null }
+    }
+
     override suspend fun extractDownload(
         tempFile: File,
         romFileName: String,

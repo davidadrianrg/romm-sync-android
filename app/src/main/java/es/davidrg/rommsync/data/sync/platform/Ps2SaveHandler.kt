@@ -77,6 +77,24 @@ class Ps2SaveHandler : SaveHandler {
 
     override suspend fun prepareForUpload(save: LocalSave): File = save.file
 
+    override suspend fun savesFingerprint(
+        romId: Int, romFileName: String, platformSlug: String,
+        savesBasePath: String, romLocalPath: String?,
+    ): String? = withContext(Dispatchers.IO) {
+        val serial = romLocalPath?.let { RomHeaderIdReader.readGameId(File(it), platformSlug) }
+            ?: extractSerialFromFileName(romFileName) ?: return@withContext null
+        val cardDirs = File(savesBasePath).listFiles()?.filter {
+            it.isDirectory && it.name.endsWith(".ps2", ignoreCase = true)
+        } ?: return@withContext null
+        cardDirs.forEach { card ->
+            val saveFolder = card.listFiles()?.firstOrNull {
+                it.isDirectory && matchesFolderName(it.name, serial)
+            } ?: return@forEach
+            return@withContext folderFingerprint(saveFolder)
+        }
+        null
+    }
+
     override suspend fun extractDownload(
         tempFile: File,
         romFileName: String,

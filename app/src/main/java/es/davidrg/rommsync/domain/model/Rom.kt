@@ -45,6 +45,8 @@ data class IgdbMetadata(
 data class RomFile(
     val filename: String,
     val size: Long,
+    /** Hash del fichero según RomM (MD5/SHA-1 según config del servidor). */
+    val hash: String? = null,
 )
 
 /**

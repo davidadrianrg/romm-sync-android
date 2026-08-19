@@ -62,6 +62,22 @@ class DolphinSaveHandler : SaveHandler {
 
     override suspend fun prepareForUpload(save: LocalSave): File = save.file
 
+    override suspend fun savesFingerprint(
+        romId: Int, romFileName: String, platformSlug: String,
+        savesBasePath: String, romLocalPath: String?,
+    ): String? = withContext(Dispatchers.IO) {
+        val gameId = romLocalPath?.let { RomHeaderIdReader.readGameId(File(it), platformSlug) }
+            ?: extractGameId(romFileName) ?: return@withContext null
+        // GC: carpeta del gameId con ficheros GCI; Wii: title/data
+        val wiiTitleDir = File(savesBasePath)
+        if (platformSlug.lowercase() in GC_SLUGS) {
+            folderFingerprint(File(savesBasePath))
+        } else {
+            val titleDir = File(wiiTitleDir, gameId)
+            folderFingerprint(File(titleDir, "data"))
+        }
+    }
+
     override suspend fun extractDownload(
         tempFile: File,
         romFileName: String,

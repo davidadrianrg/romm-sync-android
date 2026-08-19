@@ -1,5 +1,6 @@
 package es.davidrg.rommsync.data.sync.platform
 
+import es.davidrg.rommsync.util.RomHeaderIdReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -37,7 +38,10 @@ class SwitchSaveHandler : SaveHandler {
         romLocalPath: String?,
     ): List<LocalSave> = withContext(Dispatchers.IO) {
         val results = mutableListOf<LocalSave>()
-        val titleId = extractTitleId(romFileName) ?: return@withContext results
+        // Title-id: primero desde el header del XCI/NSP local (fiable), luego
+        // desde el nombre del fichero (patrón "[0100000000010000]").
+        val titleId = (romLocalPath?.let { RomHeaderIdReader.readGameId(File(it), platformSlug) }
+            ?: extractTitleId(romFileName)) ?: return@withContext results
 
         val saveDir = findSaveDir(savesBasePath, titleId) ?: return@withContext results
         if (!saveDir.isDirectory) return@withContext results
@@ -64,6 +68,16 @@ class SwitchSaveHandler : SaveHandler {
 
     override suspend fun prepareForUpload(save: LocalSave): File = save.file
 
+    override suspend fun savesFingerprint(
+        romId: Int, romFileName: String, platformSlug: String,
+        savesBasePath: String, romLocalPath: String?,
+    ): String? = withContext(Dispatchers.IO) {
+        val titleId = (romLocalPath?.let { RomHeaderIdReader.readGameId(File(it), platformSlug) }
+            ?: extractTitleId(romFileName)) ?: return@withContext null
+        val saveDir = findSaveDir(savesBasePath, titleId) ?: return@withContext null
+        folderFingerprint(saveDir)
+    }
+
     override suspend fun extractDownload(
         tempFile: File,
         romFileName: String,
@@ -71,6 +85,8 @@ class SwitchSaveHandler : SaveHandler {
         savesBasePath: String,
         targetFileName: String,
     ): Boolean = withContext(Dispatchers.IO) {
+        // Title-id desde nombre (aquí no hay ROM local disponible en el
+        // flujo de descarga de saves, el nombre es la única fuente).
         val titleId = extractTitleId(romFileName) ?: return@withContext false
 
         // Determinar la ruta destino

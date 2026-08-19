@@ -74,6 +74,10 @@ class ConfigViewModel(
         viewModelScope.launch { settingsRepository.setMaxConcurrentDownloads(max) }
     }
 
+    fun setWifiOnlyDownloads(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setWifiOnlyDownloads(enabled) }
+    }
+
     fun setRetroArchBasePath(path: String) {
         viewModelScope.launch { settingsRepository.setRetroArchBasePath(path) }
     }

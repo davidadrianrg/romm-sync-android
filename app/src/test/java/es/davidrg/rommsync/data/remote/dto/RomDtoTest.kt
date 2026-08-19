@@ -39,7 +39,7 @@ class RomDtoTest {
             languages = listOf("en"),
             summary = "A time-traveling RPG classic.",
             revision = "Rev 1",
-            fsSizeBytes = 2097152,
+            fileSizeBytes = 2097152L,
         )
 
         assertEquals(2, dto.genres.size)

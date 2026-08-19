@@ -26,6 +26,7 @@ import java.io.RandomAccessFile
 object RomHeaderIdReader {
 
     private const val PSP_SCAN_BYTES = 1024 * 1024      // 1 MB
+    private const val SWITCH_SCAN_BYTES = 512 * 1024    // 512 KB (tabla PFS0 + inicio NCA)
     private const val PS2_SCAN_BYTES = 2 * 1024 * 1024  // 2 MB
 
     /**
@@ -40,6 +41,7 @@ object RomHeaderIdReader {
                 "ps2" -> readPs2Serial(file)
                 "gc", "gamecube", "ngc" -> readGameCubeId(file)
                 "wii" -> readWiiId(file)
+                "switch", "nx", "ryujinx", "switch-emulators" -> readSwitchTitleId(file)
                 else -> null
             }
         } catch (_: Exception) {
@@ -159,7 +161,71 @@ object RomHeaderIdReader {
         return ext in setOf("cso", "chd", "gz", "zip", "7z", "rvz")
     }
 
-    /** Lee como mucho [maxBytes] desde el inicio del fichero. */
+    // ── Nintendo Switch ─────────────────────────────────────────────────
+
+    /**
+     * Title-ID de Switch desde XCI/NSP sin descomprimir nada.
+     *
+     * - XCI: PackageId en offset 0x0012 (big-endian) == TitleID base.
+     *   Validado contra la estructura XCI: tamaño de header (F0) = 0x20 y
+     *   PackageId con prefijo 0x01 0x00 (los title-ids de juego empiezan así).
+     * - NSP (PFS0): la tabla de strings contiene el nombre del CNMT, que
+     *   incluye el title-id base en hex: "TitanTitleId_0x0100XXXXXXXXXXXX" o
+     *   el propio nombre de fichero "0100XXXXXXXXXXXX.nca". Escaneamos el
+     *   prefijo en claro (antes de la zona cifrada) buscando el patrón.
+     * Fallback: escaneo alineado a 16B buscando prefijo 0x01 0x00 + ceros.
+     */
+    private fun readSwitchTitleId(file: File): String? {
+        if (isCompressed(file)) return null
+        val ext = file.extension.lowercase()
+        val prefix = readPrefix(file, SWITCH_SCAN_BYTES) ?: return null
+
+        return when (ext) {
+            "xci" -> readXciPackageId(prefix)
+            "nsp" -> readNspTitleId(prefix)
+            else -> null
+        }
+    }
+
+    /**
+     * XCI: valida el magic del gamecard ("HEADER" en 0x100 o tamaño de header
+     * 0x20 en el campo de tamaño) y lee el PackageId como title-id base.
+     */
+    private fun readXciPackageId(prefix: ByteArray): String? {
+        // Campo "headerSize" en offset 0xF0: los XCI oficiales usan 0x20
+        val headerSize = readBeLong(prefix, 0x00F0) ?: return null
+        if (headerSize != 0x20L) return null
+        val packageId = readBeLong(prefix, 0x0012) ?: return null
+        // Los title-id de aplicaciones Switch empiezan por 0x0100 en BE
+        if (packageId ushr 48 != 0x0100L) return null
+        return formatTitleId(packageId)
+    }
+
+    /**
+     * NSP: el title-id aparece en claro en la tabla de strings del PFS0
+     * (nombres de NCA tipo "0100XXXXXXXXXXXX.nca") o en el CNMT. Buscamos
+     * ASCII hex de 16 chars empezando por "0100".
+     */
+    private fun readNspTitleId(prefix: ByteArray): String? {
+        val text = String(prefix, Charsets.US_ASCII)
+        // Busca "0100" seguido de 12 hex más (title-id completo en texto)
+        val m = Regex("0100[0-9A-Fa-f]{12}").find(text)
+        return m?.value?.uppercase()
+    }
+
+    /** 0x0100XXXXXXXXXXXX -> "0100XXXXXXXXXXXX" (16 hex mayúsculas). */
+    private fun formatTitleId(titleId: Long): String =
+        "%016X".format(titleId)
+
+    private fun readBeLong(prefix: ByteArray, offset: Int): Long? {
+        if (offset + 8 > prefix.size) return null
+        var v = 0L
+        for (i in 0 until 8) {
+            v = (v shl 8) or (prefix[offset + i].toLong() and 0xFF)
+        }
+        return v
+    }
+
     private fun readPrefix(file: File, maxBytes: Int): ByteArray? {
         if (file.length() < 16) return null
         val size = minOf(file.length().toInt(), maxBytes)

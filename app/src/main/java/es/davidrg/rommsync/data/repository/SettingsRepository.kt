@@ -14,6 +14,7 @@ class SettingsRepository(private val dataStore: SettingsDataStore) {
     suspend fun setApiKey(key: String) = dataStore.setApiKey(key)
     suspend fun setRomsRootPath(path: String) = dataStore.setRomsRootPath(path)
     suspend fun setMaxConcurrentDownloads(max: Int) = dataStore.setMaxConcurrentDownloads(max)
+    suspend fun setWifiOnlyDownloads(enabled: Boolean) = dataStore.setWifiOnlyDownloads(enabled)
     suspend fun setRetroArchBasePath(path: String) = dataStore.setRetroArchBasePath(path)
     suspend fun setSaveSyncEnabled(enabled: Boolean) = dataStore.setSaveSyncEnabled(enabled)
 

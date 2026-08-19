@@ -91,6 +91,10 @@ class RomRepository(
     fun getCachedPlatforms(): Flow<List<Platform>> =
         platformDao.getAllPlatforms().map { entities -> entities.map { it.toDomain() } }
 
+    /** Flujo reactivo de todos los ROMs descargados (estadísticas). */
+    fun observeAllDownloadedRoms(): Flow<List<es.davidrg.rommsync.data.local.entity.DownloadedRomEntity>> =
+        romDao.observeAllDownloadedRoms()
+
     /** Get only visible platforms. */
     fun getVisiblePlatforms(): Flow<List<Platform>> =
         platformDao.getVisiblePlatforms().map { entities -> entities.map { it.toDomain() } }
@@ -376,7 +380,7 @@ class RomRepository(
             platformSlug = platformSlug ?: "",
             coverUrlSmall = resolveCover(pathCoverSmall, urlCover, baseCoverUrl),
             coverUrlLarge = pathCoverLarge?.let { baseCoverUrl + it.removePrefix("/") },
-            files = files.map { RomFile(it.filename, it.size) },
+            files = files.map { RomFile(it.filename, it.size, it.hash) },
             isMulti = multi || hasMultipleFiles,
             revision = revision,
             regions = regions,

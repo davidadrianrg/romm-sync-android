@@ -10,8 +10,22 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+/** Estadísticas de la biblioteca local descargada. */
+data class LibraryStats(
+    val totalRoms: Int,
+    val totalBytes: Long,
+    val byPlatform: List<PlatformStat>,
+)
+
+data class PlatformStat(
+    val platformSlug: String,
+    val romCount: Int,
+    val totalBytes: Long,
+)
 
 class PlatformsViewModel(
     private val romRepository: RomRepository,
@@ -22,6 +36,24 @@ class PlatformsViewModel(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList(),
+        )
+
+    /** Estadísticas locales de la biblioteca descargada. */
+    val libraryStats: StateFlow<LibraryStats?> = romRepository.observeAllDownloadedRoms()
+        .map { roms ->
+            if (roms.isEmpty()) null
+            else LibraryStats(
+                totalRoms = roms.size,
+                totalBytes = roms.sumOf { it.fileSizeBytes },
+                byPlatform = roms.groupBy { it.platformSlug }
+                    .map { (slug, list) -> PlatformStat(slug, list.size, list.sumOf { it.fileSizeBytes }) }
+                    .sortedByDescending { it.romCount },
+            )
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null,
         )
 
     private val _isLoading = MutableStateFlow(false)

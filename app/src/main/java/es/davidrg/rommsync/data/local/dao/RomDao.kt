@@ -48,4 +48,10 @@ interface RomDao {
      */
     @Query("SELECT * FROM downloaded_roms")
     fun getAllDownloadedRomsBlocking(): List<DownloadedRomEntity>
+
+    /**
+     * Todos los ROMs descargados como Flow reactivo (para estadísticas).
+     */
+    @Query("SELECT * FROM downloaded_roms")
+    fun observeAllDownloadedRoms(): Flow<List<DownloadedRomEntity>>
 }

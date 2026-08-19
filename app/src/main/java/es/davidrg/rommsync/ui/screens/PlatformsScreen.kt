@@ -75,6 +75,7 @@ fun PlatformsScreen() {
     val platforms by viewModel.platforms.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
+    val libraryStats by viewModel.libraryStats.collectAsState()
     val settings by container.settingsRepository.settings.collectAsState(
         initial = es.davidrg.rommsync.data.local.ServerConfig("", "", "", 2)
     )
@@ -176,6 +177,68 @@ fun PlatformsScreen() {
                         }
                         Spacer(modifier = Modifier.size(6.dp))
                         Text("Actualizar")
+                    }
+                }
+            }
+
+            // Estadísticas locales: ROMs descargados y espacio por plataforma
+            libraryStats?.let { stats ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                "${stats.totalRoms} ROMs locales",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                formatStatsBytes(stats.totalBytes),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        // Top 5 plataformas por tamaño
+                        stats.byPlatform.take(5).forEach { p ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    p.platformSlug,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    "${p.romCount} · ${formatStatsBytes(p.totalBytes)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        if (stats.byPlatform.size > 5) {
+                            Text(
+                                "+ ${stats.byPlatform.size - 5} plataformas más",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -502,5 +565,16 @@ private fun PlatformCard(
                 }
             }
         }
+    }
+}
+
+/** 1_500_000_000 → "1.4 GB" para la tarjeta de estadísticas. */
+private fun formatStatsBytes(bytes: Long): String {
+    val gb = bytes / 1_000_000_000.0
+    val mb = bytes / 1_000_000.0
+    return when {
+        gb >= 1 -> String.format(java.util.Locale.getDefault(), "%.1f GB", gb)
+        mb >= 1 -> String.format(java.util.Locale.getDefault(), "%.0f MB", mb)
+        else -> "${bytes / 1000} KB"
     }
 }
