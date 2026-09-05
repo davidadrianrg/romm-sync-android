@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -85,6 +86,8 @@ fun PlatformsScreen() {
     )
 
     val allVisible = platforms.isNotEmpty() && platforms.all { it.visible }
+    val windowInfo = es.davidrg.rommsync.ui.components.rememberWindowInfo()
+    val compact = windowInfo.isCompact
 
     LaunchedEffect(settings.isConfigured) {
         if (settings.isConfigured && platforms.isEmpty()) {
@@ -96,12 +99,16 @@ fun PlatformsScreen() {
         topBar = {
             TopAppBar(
                 title = { Text("Plataformas") },
+                modifier = Modifier.height(if (compact) 48.dp else 64.dp),
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.background,
                 ),
                 actions = {
                     if (platforms.isNotEmpty()) {
-                        TextButton(onClick = { viewModel.setAllVisible(!allVisible) }) {
+                        TextButton(
+                            onClick = { viewModel.setAllVisible(!allVisible) },
+                            contentPadding = PaddingValues(horizontal = 10.dp),
+                        ) {
                             Icon(
                                 if (allVisible) Icons.Filled.Deselect else Icons.Filled.SelectAll,
                                 contentDescription = null,
@@ -162,6 +169,7 @@ fun PlatformsScreen() {
                     FilledTonalButton(
                         onClick = { viewModel.refreshPlatforms(settings.serverUrl, settings.apiKey) },
                         enabled = !isLoading,
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
@@ -182,6 +190,7 @@ fun PlatformsScreen() {
             }
 
             // Estadísticas locales: ROMs descargados y espacio por plataforma
+            @Suppress("UNUSED_EXPRESSION")
             libraryStats?.let { stats ->
                 Card(
                     modifier = Modifier

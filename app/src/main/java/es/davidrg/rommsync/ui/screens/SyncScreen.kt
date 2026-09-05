@@ -93,6 +93,7 @@ fun SyncScreen() {
     val settings by container.settingsRepository.settings.collectAsState(
         initial = es.davidrg.rommsync.data.local.ServerConfig("", "", "", 2)
     )
+    val compact = es.davidrg.rommsync.ui.components.rememberWindowInfo().isCompact
     val syncState by viewModel.syncState.collectAsState()
     val lastTimestamp by viewModel.lastSyncTimestamp.collectAsState()
     val lastSummary by viewModel.lastSyncSummary.collectAsState()
@@ -129,8 +130,9 @@ fun SyncScreen() {
         topBar = {
             TopAppBar(
                 title = { Text("Sincronización") },
+                modifier = Modifier.height(if (compact) 48.dp else 64.dp),
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.background,
                 ),
             )
         }

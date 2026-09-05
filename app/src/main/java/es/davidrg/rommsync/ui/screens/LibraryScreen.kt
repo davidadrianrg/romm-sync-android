@@ -3,6 +3,7 @@ package es.davidrg.rommsync.ui.screens
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,15 +13,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
-import androidx.compose.foundation.lazy.staggeredgrid.items
-import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -98,6 +100,7 @@ import es.davidrg.rommsync.domain.model.DownloadStatus
 import es.davidrg.rommsync.domain.model.Platform
 import es.davidrg.rommsync.domain.model.Rom
 import es.davidrg.rommsync.domain.model.RomWithStatus
+import es.davidrg.rommsync.ui.components.FilledTonalIconButton
 import es.davidrg.rommsync.ui.viewmodel.LibraryEvent
 import es.davidrg.rommsync.ui.viewmodel.LibraryViewModel
 
@@ -110,7 +113,7 @@ private enum class RomFilter(val label: String) {
 fun LibraryScreen() {
     val context = LocalContext.current
     val container = (context.applicationContext as RomMSyncApplication).container
-    val configuration = LocalConfiguration.current
+    val windowInfo = es.davidrg.rommsync.ui.components.rememberWindowInfo()
 
     val viewModel: LibraryViewModel = viewModel(
         factory = viewModelFactory {
@@ -156,6 +159,9 @@ fun LibraryScreen() {
     // ROM pendiente de confirmación de borrado
     var romToDelete by remember { mutableStateOf<Rom?>(null) }
     val sheetState = rememberModalBottomSheetState()
+    // En pantallas compactas el sheet a media altura no deja ver los menús:
+    // lo llevamos a pantalla completa con skipPartiallyExpanded.
+    val isCompactSheet = es.davidrg.rommsync.ui.components.rememberWindowInfo().isCompact
 
     // Snackbar for download feedback
     val snackbarHostState = remember { SnackbarHostState() }
@@ -211,9 +217,17 @@ fun LibraryScreen() {
     // State for the batch download confirmation dialog.
     var showBatchDialog by remember { mutableStateOf(false) }
 
-    // Adaptive grid: more columns in landscape (handhelds 16:9 / 4:3)
-    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
-    val minCardSize = if (isLandscape) 110.dp else 140.dp
+    // Densidad de la rejilla adaptada al tamaño de ventana: en portátiles
+    // compactos (4" 16:9/4:3) buscamos ~3 columnas en horizontal y 2 en
+    // vertical; en móviles normales subimos el tamaño mínimo de tarjeta.
+    val minCardSize = when {
+        windowInfo.isCompactLandscape -> 96.dp
+        windowInfo.isCompactPortrait -> 120.dp
+        windowInfo.isLandscape -> 110.dp
+        else -> 140.dp
+    }
+
+    val isLandscape = windowInfo.isLandscape
 
     // Aspect ratio de los covers segun la plataforma seleccionada
     val coverAspectRatio = remember(selectedPlatformId, platforms) {
@@ -237,9 +251,7 @@ fun LibraryScreen() {
     }
 
     // ── Infinite scroll state ──────────────────────────────────────────
-    // Staggered grid: cada item mide su propia imagen, así que el grid no puede
-    // asumir un alto fijo por item. Usamos el layoutInfo del staggered grid.
-    val gridState = rememberLazyStaggeredGridState()
+    val gridState = rememberLazyGridState()
     val isLoadingMore by viewModel.isLoadingMore.collectAsState()
     val hasMore by viewModel.hasMore.collectAsState()
 
@@ -257,39 +269,14 @@ fun LibraryScreen() {
         }
     }
 
+    // Toolbar unificada: una sola fila en horizontal (portátiles) y hasta dos
+    // en vertical, con alturas reducidas en ventanas compactas.
+    val compact = windowInfo.isCompact
+    val fieldShape = RoundedCornerShape(12.dp)
+
     Scaffold(
-        topBar = {
-            if (!isLandscape) {
-                TopAppBar(
-                    title = { Text("Biblioteca") },
-                    colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                    actions = {
-                        val showBatchButton = selectedPlatformId != null && missingRoms.isNotEmpty()
-                        if (showBatchButton) {
-                            IconButton(onClick = { showBatchDialog = true }) {
-                                androidx.compose.material3.Badge(
-                                    containerColor = MaterialTheme.colorScheme.error,
-                                    content = {
-                                        Text(
-                                            text = "${missingRoms.size}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onError,
-                                        )
-                                    },
-                                )
-                                Icon(
-                                    Icons.Filled.DownloadDone,
-                                    contentDescription = "Descargar faltantes (${missingRoms.size})",
-                                )
-                            }
-                        }
-                    },
-                )
-            }
-        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Column(
             modifier = Modifier
@@ -297,95 +284,32 @@ fun LibraryScreen() {
                 .padding(padding)
                 .padding(horizontal = 12.dp),
         ) {
-            // En horizontal: plataforma + búsqueda + filtros + batch en una
-            // sola fila compacta, para maximizar el área de carátulas.
-            if (isLandscape) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ExposedDropdownMenuBox(
-                        expanded = platformMenuExpanded,
-                        onExpandedChange = { platformMenuExpanded = it },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        OutlinedTextField(
-                            value = platforms.find { it.id == selectedPlatformId }?.name
-                                ?: "Plataforma",
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(platformMenuExpanded) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth().menuAnchor(),
-                        )
-                        ExposedDropdownMenu(
-                            expanded = platformMenuExpanded,
-                            onDismissRequest = { platformMenuExpanded = false },
-                        ) {
-                            platforms.forEach { platform ->
-                                DropdownMenuItem(
-                                    text = { Text("${platform.name} (${platform.romCount})") },
-                                    onClick = {
-                                        searchQuery = ""
-                                        viewModel.selectPlatform(platform.id, settings.serverUrl, settings.apiKey)
-                                        platformMenuExpanded = false
-                                    },
-                                )
-                            }
-                        }
-                    }
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Buscar...") },
-                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    // Filtros inline (compactos)
-                    RomFilter.entries.forEach { filter ->
-                        FilterChip(
-                            selected = selectedFilter == filter,
-                            onClick = { selectedFilter = filter },
-                            label = { Text(filter.label) },
-                        )
-                    }
-                    // Descargar faltantes
-                    val showBatchButton = selectedPlatformId != null && missingRoms.isNotEmpty()
-                    if (showBatchButton) {
-                        androidx.compose.material3.FilledTonalButton(
-                            onClick = { showBatchDialog = true },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                        ) {
-                            Icon(
-                                Icons.Filled.DownloadDone,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Text(
-                                " ${missingRoms.size}",
-                                style = MaterialTheme.typography.labelLarge,
-                            )
-                        }
-                    }
-                }
-            } else {
+            // ── Fila 1: selector de plataforma + acciones ────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = if (compact) 4.dp else 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 ExposedDropdownMenuBox(
                     expanded = platformMenuExpanded,
                     onExpandedChange = { platformMenuExpanded = it },
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    modifier = Modifier.weight(1f),
                 ) {
                     OutlinedTextField(
                         value = platforms.find { it.id == selectedPlatformId }?.name
                             ?: "Selecciona plataforma",
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Plataforma") },
+                        textStyle = MaterialTheme.typography.bodyMedium,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(platformMenuExpanded) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        singleLine = true,
+                        shape = fieldShape,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(if (compact) 46.dp else 56.dp)
+                            .menuAnchor(),
                     )
                     ExposedDropdownMenu(
                         expanded = platformMenuExpanded,
@@ -403,32 +327,57 @@ fun LibraryScreen() {
                         }
                     }
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Buscar en toda la plataforma...") },
-                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RomFilter.entries.forEach { filter ->
-                        FilterChip(
-                            selected = selectedFilter == filter,
-                            onClick = { selectedFilter = filter },
-                            label = { Text(filter.label) },
+                // Descargar faltantes (batch)
+                if (selectedPlatformId != null && missingRoms.isNotEmpty()) {
+                    FilledTonalIconButton(
+                        onClick = { showBatchDialog = true },
+                        size = if (compact) 46.dp else 52.dp,
+                        badge = "${missingRoms.size}",
+                    ) {
+                        Icon(
+                            Icons.Filled.DownloadDone,
+                            contentDescription = "Descargar faltantes (${missingRoms.size})",
+                            modifier = Modifier.size(22.dp),
                         )
                     }
+                }
+            }
+
+            // ── Fila 2: búsqueda ─────────────────────────────────────────
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Buscar en toda la plataforma...") },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                singleLine = true,
+                shape = fieldShape,
+                textStyle = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp)
+                    .height(if (compact) 46.dp else 56.dp),
+            )
+
+            // ── Fila 3: filtros (siempre visibles, compactos) ────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RomFilter.entries.forEach { filter ->
+                    FilterChip(
+                        selected = selectedFilter == filter,
+                        onClick = { selectedFilter = filter },
+                        label = {
+                            Text(
+                                filter.label,
+                                style = if (compact) MaterialTheme.typography.labelSmall
+                                        else MaterialTheme.typography.labelMedium,
+                            )
+                        },
+                    )
                 }
             }
 
@@ -501,12 +450,12 @@ fun LibraryScreen() {
                 },
                 modifier = Modifier.fillMaxSize(),
             ) {
-                LazyVerticalStaggeredGrid(
-                    columns = StaggeredGridCells.Adaptive(minSize = minCardSize),
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = minCardSize),
                     state = gridState,
                     modifier = Modifier.fillMaxSize(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalItemSpacing = 8.dp,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(vertical = 8.dp),
                 ) {
                     items(filteredRoms, key = { it.rom.id }) { romStatus ->
@@ -527,7 +476,7 @@ fun LibraryScreen() {
                     }
                     // Loading more footer
                     if (isLoadingMore) {
-                        item(span = StaggeredGridItemSpan.FullLine) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -566,7 +515,11 @@ fun LibraryScreen() {
         }
         ModalBottomSheet(
             onDismissRequest = { selectedRom = null },
-            sheetState = sheetState,
+            sheetState = if (isCompactSheet) {
+                rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            } else {
+                sheetState
+            },
             containerColor = MaterialTheme.colorScheme.surface,
         ) {
             RomDetailSheet(
@@ -711,13 +664,36 @@ private fun RomCard(
             .fillMaxWidth()
             .aspectRatio(cardAspectRatio)
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.surfaceContainerHigh,
+                        MaterialTheme.colorScheme.surfaceContainerHighest,
+                    ),
+                ),
+            )
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(12.dp),
+            )
             .combinedClickable(
                 onClick = {},
                 onLongClick = { onLongPress(romWithStatus) },
             ),
         contentAlignment = Alignment.Center,
     ) {
+        // Placeholder mientras decodifica el cover
+        if (painter.state is coil.compose.AsyncImagePainter.State.Loading ||
+            painter.state is coil.compose.AsyncImagePainter.State.Error
+        ) {
+            Icon(
+                Icons.Outlined.SportsEsports,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(32.dp),
+            )
+        }
         Image(
             painter = painter,
             contentDescription = romWithStatus.rom.name,

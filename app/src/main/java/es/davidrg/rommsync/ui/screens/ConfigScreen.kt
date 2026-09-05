@@ -78,6 +78,7 @@ fun ConfigScreen() {
 
     val settings by viewModel.settings.collectAsState()
     val scanState by viewModel.scanState.collectAsState()
+    val compact = es.davidrg.rommsync.ui.components.rememberWindowInfo().isCompact
     rememberNotificationPermissionState()
 
     var serverUrl by remember { mutableStateOf("") }
@@ -108,8 +109,9 @@ fun ConfigScreen() {
         topBar = {
             TopAppBar(
                 title = { Text("Configuración") },
+                modifier = Modifier.height(if (compact) 48.dp else 64.dp),
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.background,
                 ),
             )
         }

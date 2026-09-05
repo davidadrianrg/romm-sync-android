@@ -70,6 +70,7 @@ fun DownloadQueueScreen() {
     )
 
     val downloads by viewModel.downloads.collectAsState()
+    val compact = es.davidrg.rommsync.ui.components.rememberWindowInfo().isCompact
 
     val activeCount = downloads.count { it.isRunning || (!it.isCompleted && !it.isFailed) }
     val hasCompletedOrFailed = downloads.any { it.isCompleted || it.isFailed }
@@ -91,8 +92,9 @@ fun DownloadQueueScreen() {
                         }
                     }
                 },
+                modifier = Modifier.height(if (compact) 48.dp else 64.dp),
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.background,
                 ),
                 actions = {
                     if (hasCompletedOrFailed) {
