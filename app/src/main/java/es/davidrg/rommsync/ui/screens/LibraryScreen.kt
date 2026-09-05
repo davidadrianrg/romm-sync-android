@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package es.davidrg.rommsync.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -58,6 +60,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -86,6 +89,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -274,9 +278,34 @@ fun LibraryScreen() {
     val compact = windowInfo.isCompact
     val fieldShape = RoundedCornerShape(12.dp)
 
+    val scope = rememberCoroutineScope()
+    val showScrollToTop by remember {
+        derivedStateOf { gridState.firstVisibleItemIndex > 6 }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
+        floatingActionButton = {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showScrollToTop,
+                enter = androidx.compose.animation.fadeIn() +
+                    androidx.compose.animation.scaleIn(initialScale = 0.6f),
+                exit = androidx.compose.animation.fadeOut() +
+                    androidx.compose.animation.scaleOut(targetScale = 0.6f),
+            ) {
+                SmallFloatingActionButton(
+                    onClick = {
+                        scope.launch { gridState.animateScrollToItem(0) }
+                    },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    shape = CircleShape,
+                ) {
+                    Icon(Icons.Filled.ExpandLess, contentDescription = "Volver arriba")
+                }
+            }
+        },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -912,10 +941,24 @@ private fun RomDetailSheet(
         DetailRow("Tamaño", formatFileSize(rom.fileSizeBytes))
         rom.fileNameNoTags?.let { DetailRow("Nombre limpio", it) }
         rom.fileExtension?.let { DetailRow("Extensión", it) }
-        if (rom.languages.isNotEmpty()) DetailRow("Idiomas", rom.languages.joinToString(", "))
-        if (rom.genres.isNotEmpty()) DetailRow("Géneros", rom.genres.joinToString(", "))
         if (rom.isMulti) DetailRow("Multi-archivo", "Sí (${rom.files.size} archivos)")
         rom.igdbId?.let { DetailRow("IGDB ID", it.toString()) }
+
+        // Idiomas y géneros como chips visuales
+        if (rom.languages.isNotEmpty() || rom.genres.isNotEmpty()) {
+            Spacer(modifier = Modifier.size(10.dp))
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                rom.languages.forEach { lang ->
+                    AssistChipLike("${rom.platformSlug.uppercase()} · $lang".substringAfter(" · "))
+                }
+                rom.genres.forEach { genre ->
+                    AssistChipLike(genre)
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.size(20.dp))
 
@@ -1094,19 +1137,46 @@ private fun DetailRow(label: String, value: String) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 3.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "$label: ",
+            text = label,
             style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 12.dp),
+        )
+    }
+}
+
+/** Chip compacto para metadatos tipo idioma/género. */
+@Composable
+private fun AssistChipLike(text: String) {
+    Box(
+        modifier = Modifier
+            .background(
+                MaterialTheme.colorScheme.surfaceContainerHigh,
+                RoundedCornerShape(8.dp),
+            )
+            .border(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                RoundedCornerShape(8.dp),
+            )
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
