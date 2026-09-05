@@ -313,6 +313,10 @@ fun LibraryScreen() {
                 .padding(padding)
                 .padding(horizontal = 12.dp),
         ) {
+            // Header colapsable: en pantallas pequeñas recupera ~140dp para
+            // la rejilla al hacer scroll hacia abajo.
+            es.davidrg.rommsync.ui.components.CollapsingHeader {
+                Column {
             // ── Fila 1: selector de plataforma + acciones ────────────────
             Row(
                 modifier = Modifier
@@ -407,6 +411,8 @@ fun LibraryScreen() {
                             )
                         },
                     )
+                }
+            }
                 }
             }
 
