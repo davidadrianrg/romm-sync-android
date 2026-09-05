@@ -31,6 +31,14 @@ class SaveSyncWorker(
         val dataStore = SettingsDataStore(applicationContext)
         val database = RomSyncDatabase.getDatabase(applicationContext)
 
+        // Guard de seguridad: si el usuario desactivó el sync de saves, el
+        // worker termina inmediatamente sin tocar servidor ni disco. Cubre
+        // trabajos periódicos ya encolados antes del cambio de ajuste.
+        if (!dataStore.getSaveSyncEnabledBlocking()) {
+            Log.i(TAG, "Save sync disabled in settings, skipping run")
+            return@withContext Result.success()
+        }
+
         // Foreground notification
         createNotificationChannel()
         try {

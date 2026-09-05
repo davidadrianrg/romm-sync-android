@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -72,7 +73,7 @@ fun ConfigScreen() {
 
     val viewModel: ConfigViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { ConfigViewModel(container.settingsRepository, container.romRepository) }
+            initializer { ConfigViewModel(container.settingsRepository, container.romRepository, container.saveSyncManager) }
         }
     )
 
@@ -319,6 +320,33 @@ fun ConfigScreen() {
                 icon = Icons.Outlined.Folder,
                 title = "Datos de ES-DE (gamelist)",
             ) {
+                // Toggle maestro: oculta la función de exportación a ES-DE
+                var esdeEnabledLocal by remember { mutableStateOf<Boolean?>(null) }
+                val esdeEnabled by container.settingsRepository.esdeExportEnabled.collectAsState(initial = true)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Usar ES-DE", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Desactívalo si no usas ES-DE como frontend: se ocultará " +
+                                "su configuración y la exportación de metadatos.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = esdeEnabledLocal ?: esdeEnabled,
+                        onCheckedChange = { enabled ->
+                            esdeEnabledLocal = enabled
+                            viewModel.setEsdeExportEnabled(enabled)
+                        },
+                    )
+                }
+                if (esdeEnabledLocal ?: esdeEnabled) {
                 OutlinedTextField(
                     value = esdeDataDir,
                     onValueChange = { viewModel.setEsdeDataPath(it) },
@@ -348,6 +376,7 @@ fun ConfigScreen() {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                }
             }
 
             // ── RetroHRAI Media ──────────────────────────────────────────
@@ -355,6 +384,33 @@ fun ConfigScreen() {
                 icon = Icons.Outlined.Folder,
                 title = "Media de RetroHRAI",
             ) {
+                // Toggle maestro: oculta la exportación a RetroHRAI
+                var retroHraiEnabledLocal by remember { mutableStateOf<Boolean?>(null) }
+                val retroHraiEnabled by container.settingsRepository.retroHraiExportEnabled.collectAsState(initial = true)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Usar RetroHRAI", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Desactívalo si no usas RetroHRAI: se ocultará su " +
+                                "configuración y la copia de media en sus carpetas.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = retroHraiEnabledLocal ?: retroHraiEnabled,
+                        onCheckedChange = { enabled ->
+                            retroHraiEnabledLocal = enabled
+                            viewModel.setRetroHraiExportEnabled(enabled)
+                        },
+                    )
+                }
+                if (retroHraiEnabledLocal ?: retroHraiEnabled) {
                 OutlinedTextField(
                     value = retroHraiMediaPath,
                     onValueChange = { viewModel.setRetroHraiMediaPath(it) },
@@ -384,6 +440,7 @@ fun ConfigScreen() {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                }
             }
 
             // ── Descargas ───────────────────────────────────────────────
@@ -420,6 +477,40 @@ fun ConfigScreen() {
                     Switch(
                         checked = settings.wifiOnlyDownloads,
                         onCheckedChange = { viewModel.setWifiOnlyDownloads(it) },
+                    )
+                }
+            }
+
+            // ── Sincronización de partidas ──────────────────────────────
+            // Guardamos el estado local del toggle para que la UI no parpadee
+            // con el valor inicial por defecto mientras carga DataStore.
+            var saveSyncEnabledLocal by remember { mutableStateOf<Boolean?>(null) }
+            val saveSyncEnabled by container.settingsRepository.saveSyncEnabled.collectAsState(initial = true)
+            SettingsSection(
+                icon = Icons.Outlined.Sync,
+                title = "Sincronización de partidas",
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Sincronizar saves", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Desactívalo para ocultar la pestaña Sync, su configuración " +
+                                "y cualquier trabajo de sincronización en segundo plano.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = saveSyncEnabledLocal ?: saveSyncEnabled,
+                        onCheckedChange = { enabled ->
+                            saveSyncEnabledLocal = enabled
+                            viewModel.setSaveSyncEnabled(enabled)
+                        },
                     )
                 }
             }

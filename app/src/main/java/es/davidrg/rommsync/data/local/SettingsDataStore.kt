@@ -52,6 +52,10 @@ class SettingsDataStore(private val context: Context) {
         val ESDE_DATA_DIR = stringPreferencesKey("esde_data_dir")
         val RETROHRAI_MEDIA_PATH = stringPreferencesKey("retrohrai_media_path")
 
+        // Toggles de funciones opcionales (opt-out: ausencia = activado)
+        val ESDE_EXPORT_ENABLED = booleanPreferencesKey("esde_export_enabled")
+        val RETROHRAI_EXPORT_ENABLED = booleanPreferencesKey("retrohrai_export_enabled")
+
         /**
          * Legacy DataStore key where the API key used to live (plaintext).
          * Kept only to support one-time migration; the value is deleted after
@@ -129,7 +133,10 @@ class SettingsDataStore(private val context: Context) {
     val syncDeviceId: Flow<Int?> = context.dataStore.data.map { it[DEVICE_ID] }
     val syncDeviceIdString: Flow<String?> = context.dataStore.data.map { it[DEVICE_ID_STRING] }
     val saveSyncEnabled: Flow<Boolean> = context.dataStore.data.map {
-        (it[SAVE_SYNC_ENABLED] ?: "false") == "true"
+        // Ausencia de valor = activado (opt-out): nadie ha escrito esta clave
+        // antes de que existiera el toggle, así que el comportamiento por
+        // defecto conserva la función visible.
+        (it[SAVE_SYNC_ENABLED] ?: "true") == "true"
     }
     val saveSyncIntervalMinutes: Flow<Int> = context.dataStore.data.map {
         it[SAVE_SYNC_INTERVAL_MINUTES] ?: 0
@@ -148,6 +155,12 @@ class SettingsDataStore(private val context: Context) {
     }
     val retroHraiMediaPath: Flow<String> = context.dataStore.data.map {
         it[RETROHRAI_MEDIA_PATH] ?: DEFAULT_RETROHRAI_MEDIA_PATH
+    }
+    val esdeExportEnabled: Flow<Boolean> = context.dataStore.data.map {
+        it[ESDE_EXPORT_ENABLED] ?: true
+    }
+    val retroHraiExportEnabled: Flow<Boolean> = context.dataStore.data.map {
+        it[RETROHRAI_EXPORT_ENABLED] ?: true
     }
 
     /** Combined settings snapshot */
@@ -235,6 +248,14 @@ class SettingsDataStore(private val context: Context) {
         context.dataStore.edit { it[ESDE_DATA_DIR] = path.trimEnd('/') }
     }
 
+    suspend fun setEsdeExportEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[ESDE_EXPORT_ENABLED] = enabled }
+    }
+
+    suspend fun setRetroHraiExportEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[RETROHRAI_EXPORT_ENABLED] = enabled }
+    }
+
     suspend fun setRetroHraiMediaPath(path: String) {
         context.dataStore.edit { it[RETROHRAI_MEDIA_PATH] = path.trimEnd('/') }
     }
@@ -296,6 +317,13 @@ class SettingsDataStore(private val context: Context) {
         return runCatching {
             runBlocking { context.dataStore.data.first()[SAVE_SYNC_INTERVAL_MINUTES] ?: 0 }
         }.getOrDefault(0)
+    }
+
+    /** Lectura síncrona del toggle de sync de saves (para Workers y Application). */
+    fun getSaveSyncEnabledBlocking(): Boolean {
+        return runCatching {
+            runBlocking { (context.dataStore.data.first()[SAVE_SYNC_ENABLED] ?: "true") == "true" }
+        }.getOrDefault(true)
     }
 
     fun getSyncDeviceIdBlocking(): Int? {

@@ -144,6 +144,16 @@ class SaveSyncManager(private val context: Context) {
     companion object {
         private const val PERIODIC_WORK_NAME = "save_sync_periodic"
     }
+
+    /**
+     * Cancela todos los trabajos de sync (periódico, único y resolución de
+     * conflictos). Se llama cuando el usuario desactiva el sync de saves.
+     */
+    fun cancelAllSyncWork() {
+        workManager.cancelUniqueWork(PERIODIC_WORK_NAME)
+        workManager.cancelUniqueWork(SaveSyncWorker.WORK_NAME)
+        workManager.cancelUniqueWork(SaveSyncWorker.CONFLICT_WORK_NAME)
+    }
 }
 
 sealed class SyncState {

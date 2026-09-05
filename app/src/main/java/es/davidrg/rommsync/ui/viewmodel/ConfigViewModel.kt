@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import es.davidrg.rommsync.data.local.ServerConfig
 import es.davidrg.rommsync.data.repository.RomRepository
 import es.davidrg.rommsync.data.repository.SettingsRepository
+import es.davidrg.rommsync.data.sync.SaveSyncManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -16,6 +17,7 @@ import kotlinx.coroutines.launch
 class ConfigViewModel(
     private val settingsRepository: SettingsRepository,
     private val romRepository: RomRepository? = null,
+    private val saveSyncManager: SaveSyncManager? = null,
 ) : ViewModel() {
 
     val settings: StateFlow<ServerConfig> = settingsRepository.settings
@@ -82,12 +84,42 @@ class ConfigViewModel(
         viewModelScope.launch { settingsRepository.setRetroArchBasePath(path) }
     }
 
+    /**
+     * Activa/desactiva la función de sincronización de saves. Al desactivar
+     * cancela cualquier trabajo de sync encolado; al reactivar restaura el
+     * periodo configurado si existía.
+     */
+    fun setSaveSyncEnabled(enabled: Boolean) {
+        val manager = saveSyncManager ?: return
+        viewModelScope.launch {
+            settingsRepository.setSaveSyncEnabled(enabled)
+            if (enabled) {
+                val interval = settingsRepository.saveSyncIntervalMinutes.first()
+                if (interval > 0) {
+                    manager.schedulePeriodicSync(interval)
+                }
+            } else {
+                manager.cancelAllSyncWork()
+            }
+        }
+    }
+
     fun setEsdeDataPath(path: String) {
         viewModelScope.launch { settingsRepository.setEsdeDataDir(path) }
     }
 
     fun setRetroHraiMediaPath(path: String) {
         viewModelScope.launch { settingsRepository.setRetroHraiMediaPath(path) }
+    }
+
+    /** Muestra/oculta la exportación de metadatos a ES-DE. */
+    fun setEsdeExportEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setEsdeExportEnabled(enabled) }
+    }
+
+    /** Muestra/oculta la exportación de metadatos a RetroHRAI. */
+    fun setRetroHraiExportEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setRetroHraiExportEnabled(enabled) }
     }
 }
 

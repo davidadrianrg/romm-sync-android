@@ -84,6 +84,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -138,6 +139,9 @@ fun LibraryScreen() {
         initial = es.davidrg.rommsync.data.local.ServerConfig("", "", "", 2)
     )
     val platforms by container.romRepository.getVisiblePlatforms().collectAsState(initial = emptyList())
+    // La sección de sync del detalle de juego solo aparece si la función está
+    // activada en Configuración.
+    val saveSyncEnabled by container.settingsRepository.saveSyncEnabled.collectAsState(initial = true)
     val romsWithStatus by viewModel.romsWithStatus.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val selectedPlatformId by viewModel.selectedPlatformId.collectAsState()
@@ -283,6 +287,12 @@ fun LibraryScreen() {
         derivedStateOf { gridState.firstVisibleItemIndex > 6 }
     }
 
+    // Estado del header colapsable. La conexión nestedScroll se instala en la
+    // Column que contiene TANTO el header como la rejilla: los deltas de
+    // scroll de un contenedor lazy suben hacia sus ancestros, y la rejilla es
+    // hermana del header, no su hija.
+    val headerState = es.davidrg.rommsync.ui.components.rememberCollapsingHeaderState()
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
@@ -311,11 +321,14 @@ fun LibraryScreen() {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 12.dp)
+                .nestedScroll(headerState.connection),
         ) {
             // Header colapsable: en pantallas pequeñas recupera ~140dp para
-            // la rejilla al hacer scroll hacia abajo.
-            es.davidrg.rommsync.ui.components.CollapsingHeader {
+            // la rejilla al hacer scroll hacia abajo. El contenido queda
+            // anclado arriba, así que el selector de plataforma es lo último
+            // en ocultarse (y siempre accesible tras expandir).
+            es.davidrg.rommsync.ui.components.CollapsingHeader(state = headerState) {
                 Column {
             // ── Fila 1: selector de plataforma + acciones ────────────────
             Row(
@@ -561,6 +574,7 @@ fun LibraryScreen() {
                 rom = rom,
                 isDownloaded = isDownloaded,
                 isDownloading = romsWithStatus.any { it.rom.id == rom.id && it.status == DownloadStatus.DOWNLOADING },
+                syncEnabled = saveSyncEnabled,
                 savesPathOverride = syncConfig?.savesPathOverride,
                 excludedFromSync = syncConfig?.excludedFromSync ?: false,
                 platformSavesPath = platformSavesPath,
@@ -843,6 +857,7 @@ private fun RomDetailSheet(
     rom: Rom,
     isDownloaded: Boolean,
     isDownloading: Boolean,
+    syncEnabled: Boolean,
     savesPathOverride: String?,
     excludedFromSync: Boolean,
     platformSavesPath: String,
@@ -1035,8 +1050,9 @@ private fun RomDetailSheet(
         }
 
         // ── Configuración de sincronización de partidas ────────────────
-        // Solo tiene sentido para juegos descargados (son los que se sincronizan).
-        if (isDownloaded) {
+        // Solo tiene sentido para juegos descargados (son los que se sincronizan)
+        // y si la función de sync no está desactivada en Configuración.
+        if (isDownloaded && syncEnabled) {
             Spacer(modifier = Modifier.size(24.dp))
             androidx.compose.material3.HorizontalDivider()
             Spacer(modifier = Modifier.size(16.dp))

@@ -23,6 +23,7 @@ import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -61,11 +62,24 @@ fun RomMSyncApp() {
     val needsOnboarding = !settings.isConfigured || !hasAllFilesAccess()
     val windowInfo = rememberWindowInfo()
 
+    // La pestaña Sync solo existe si la función de sincronizar saves está
+    // activada en Configuración (por defecto sí).
+    val saveSyncEnabled by container.settingsRepository.saveSyncEnabled.collectAsState(initial = true)
+    val navItems = if (saveSyncEnabled) bottomNavItems else bottomNavItems.filter { it != Screen.Sync }
+
+    // Si el usuario desactiva el sync mientras está en esa pestaña, lo
+    // devolvemos a Biblioteca para no dejar un destino inalcanzable.
+    LaunchedEffect(saveSyncEnabled) {
+        if (!saveSyncEnabled && currentDestination?.route == Screen.Sync.route) {
+            navigateTo(Screen.Library.route, navController)
+        }
+    }
+
     // En horizontal (portátiles 16:9 / 4:3) un rail lateral libera la altura
     // que consumía la bottom bar: todo el alto de pantalla para el contenido.
     if (windowInfo.isLandscape && !needsOnboarding) {
         Row(modifier = Modifier.fillMaxSize()) {
-            AppNavRail(currentDestination) { route -> navigateTo(route, navController) }
+            AppNavRail(currentDestination, navItems) { route -> navigateTo(route, navController) }
             AppNavHost(
                 navController = navController,
                 needsOnboarding = needsOnboarding,
@@ -79,7 +93,7 @@ fun RomMSyncApp() {
             modifier = Modifier.fillMaxSize(),
             bottomBar = {
                 if (!needsOnboarding) {
-                    AppBottomBar(currentDestination) { route -> navigateTo(route, navController) }
+                    AppBottomBar(currentDestination, navItems) { route -> navigateTo(route, navController) }
                 }
             },
         ) { innerPadding ->
@@ -97,13 +111,14 @@ fun RomMSyncApp() {
 @Composable
 private fun AppNavRail(
     currentDestination: NavDestination?,
+    navItems: List<Screen>,
     onNavigate: (String) -> Unit,
 ) {
     NavigationRail(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         header = {},
     ) {
-        bottomNavItems.forEach { screen ->
+        navItems.forEach { screen ->
             val selected = isSelected(screen.route, currentDestination)
             NavigationRailItem(
                 selected = selected,
@@ -131,13 +146,14 @@ private fun AppNavRail(
 @Composable
 private fun AppBottomBar(
     currentDestination: NavDestination?,
+    navItems: List<Screen>,
     onNavigate: (String) -> Unit,
 ) {
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 0.dp,
     ) {
-        bottomNavItems.forEach { screen ->
+        navItems.forEach { screen ->
             val selected = isSelected(screen.route, currentDestination)
             NavigationBarItem(
                 selected = selected,

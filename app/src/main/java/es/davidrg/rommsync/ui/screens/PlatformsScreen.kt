@@ -89,6 +89,12 @@ fun PlatformsScreen() {
     val windowInfo = es.davidrg.rommsync.ui.components.rememberWindowInfo()
     val compact = windowInfo.isCompact
 
+    // La configuración de sync por plataforma solo tiene sentido si la
+    // función está activada en Configuración.
+    val saveSyncEnabled by container.settingsRepository.saveSyncEnabled.collectAsState(initial = true)
+    val esdeExportEnabled by container.settingsRepository.esdeExportEnabled.collectAsState(initial = true)
+    val retroHraiExportEnabled by container.settingsRepository.retroHraiExportEnabled.collectAsState(initial = true)
+
     LaunchedEffect(settings.isConfigured) {
         if (settings.isConfigured && platforms.isEmpty()) {
             viewModel.refreshPlatforms(settings.serverUrl, settings.apiKey)
@@ -271,6 +277,9 @@ fun PlatformsScreen() {
                         platform = platform,
                         retroArchBasePath = retroArchBasePath,
                         container = container,
+                        syncEnabled = saveSyncEnabled,
+                        esdeEnabled = esdeExportEnabled,
+                        retroHraiEnabled = retroHraiExportEnabled,
                         onToggle = { viewModel.togglePlatformVisibility(it) },
                         onEmulatorChange = { id, emu -> viewModel.updatePlatformEmulator(id, emu) },
                         onSavesPathChange = { id, path -> viewModel.updatePlatformSavesPath(id, path) },
@@ -286,6 +295,9 @@ private fun PlatformCard(
     platform: Platform,
     retroArchBasePath: String,
     container: es.davidrg.rommsync.data.AppContainer,
+    syncEnabled: Boolean,
+    esdeEnabled: Boolean,
+    retroHraiEnabled: Boolean,
     onToggle: (Platform) -> Unit,
     onEmulatorChange: (Int, String?) -> Unit,
     onSavesPathChange: (Int, String?) -> Unit,
@@ -363,13 +375,17 @@ private fun PlatformCard(
                         )
                     }
                 }
-                // Botón de expandir configuración de sync
-                IconButton(onClick = { expanded = !expanded }) {
-                    Icon(
-                        if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = "Configurar sync",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                // Botón de expandir configuración (sync y export): sin
+                // sentido si todas las funciones configurables están
+                // desactivadas.
+                if (syncEnabled || esdeEnabled || retroHraiEnabled) {
+                    IconButton(onClick = { expanded = !expanded }) {
+                        Icon(
+                            if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                            contentDescription = "Configurar sync",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 Switch(
                     checked = platform.visible,
@@ -386,6 +402,7 @@ private fun PlatformCard(
             // Panel expandible con config de sync
             if (expanded) {
                 Spacer(modifier = Modifier.height(12.dp))
+                if (syncEnabled) {
                 Text(
                     "Configuración de sync",
                     style = MaterialTheme.typography.labelLarge,
@@ -474,21 +491,34 @@ private fun PlatformCard(
                         },
                     )
                 }
+                } // end if (syncEnabled)
 
-                // ── Exportar metadatos a ES-DE ──────────────────────────
+                // ── Exportar metadatos (ES-DE / RetroHRAI) ────────────────
+                // Visible si al menos uno de los dos frontends está activado
+                // en Configuración.
+                if (esdeEnabled || retroHraiEnabled) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "Exportar a ES-DE",
+                    if (esdeEnabled) "Exportar a ES-DE" else "Exportar a RetroHRAI",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Descarga carátulas, screenshots, vídeos y manuales de RomM " +
-                        "y actualiza el gamelist.xml de esta plataforma.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (esdeEnabled) {
+                    Text(
+                        "Descarga carátulas, screenshots, vídeos y manuales de RomM " +
+                            "y actualiza el gamelist.xml de esta plataforma.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Text(
+                        "Descarga carátulas, screenshots, vídeos y manuales de RomM " +
+                            "a la estructura de carpetas de RetroHRAI.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Spacer(modifier = Modifier.height(8.dp))
 
                 val exportState by container.metadataExportManager
@@ -498,38 +528,42 @@ private fun PlatformCard(
                 val isExporting = exportState is es.davidrg.rommsync.data.metadata.ExportState.Running ||
                     exportState is es.davidrg.rommsync.data.metadata.ExportState.Pending
 
-                // Toggle: incluir RetroHRAI además de ES-DE
+                // Toggle: incluir RetroHRAI además de ES-DE (solo si ambos
+                // frontends están activados)
                 var exportRetroHrai by remember { mutableStateOf(false) }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Switch(
-                        checked = exportRetroHrai,
-                        onCheckedChange = { exportRetroHrai = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary,
-                            uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        ),
-                    )
-                    Spacer(modifier = Modifier.size(10.dp))
-                    Text(
-                        "Exportar también a RetroHRAI",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+                if (retroHraiEnabled && esdeEnabled) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Switch(
+                            checked = exportRetroHrai,
+                            onCheckedChange = { exportRetroHrai = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            ),
+                        )
+                        Spacer(modifier = Modifier.size(10.dp))
+                        Text(
+                            "Exportar también a RetroHRAI",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
-                Spacer(modifier = Modifier.height(8.dp))
 
                 FilledTonalButton(
                     onClick = {
                         container.metadataExportManager.triggerExport(
                             platformId = platform.id,
                             platformSlug = platform.slug,
-                            retroHrai = exportRetroHrai,
+                            gamelist = esdeEnabled,
+                            retroHrai = retroHraiEnabled && (exportRetroHrai || !esdeEnabled),
                         )
                     },
                     enabled = !isExporting,
@@ -572,6 +606,7 @@ private fun PlatformCard(
                     }
                     else -> {}
                 }
+                } // end if (esdeEnabled || retroHraiEnabled)
             }
         }
     }

@@ -28,6 +28,13 @@ class RomMSyncApplication : Application(), Configuration.Provider, ImageLoaderFa
      * KEEP garantiza que siempre exista.
      */
     private fun restorePeriodicSync() {
+        // Si el usuario desactivó el sync de saves, no re-registramos el
+        // trabajo periódico en el arranque (y limpiamos el que pudiera quedar
+        // de una versión anterior).
+        if (!container.settingsDataStore.getSaveSyncEnabledBlocking()) {
+            container.saveSyncManager.cancelAllSyncWork()
+            return
+        }
         val interval = container.settingsDataStore.getSyncIntervalMinutesBlocking()
         if (interval > 0) {
             container.saveSyncManager.schedulePeriodicSync(interval)
