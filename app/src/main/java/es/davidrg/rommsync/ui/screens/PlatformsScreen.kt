@@ -1,6 +1,7 @@
 package es.davidrg.rommsync.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -195,8 +196,10 @@ fun PlatformsScreen() {
                 }
             }
 
-            // Estadísticas locales: ROMs descargados y espacio por plataforma
-            @Suppress("UNUSED_EXPRESSION")
+            // Estadísticas locales: ROMs descargados y espacio por plataforma.
+            // Desplegable: colapsada ocupa una sola fila para no tapar la
+            // lista de plataformas; el detalle por plataforma va detrás.
+            var statsExpanded by remember { mutableStateOf(false) }
             libraryStats?.let { stats ->
                 Card(
                     modifier = Modifier
@@ -207,52 +210,68 @@ fun PlatformsScreen() {
                         containerColor = MaterialTheme.colorScheme.surfaceContainer,
                     ),
                 ) {
-                    Column(
+                    // Fila resumen siempre visible: abre/cierra el detalle
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clickable { statsExpanded = !statsExpanded }
                             .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Text(
-                                "${stats.totalRoms} ROMs locales",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
+                        Text(
+                            "${stats.totalRoms} ROMs locales",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 formatStatsBytes(stats.totalBytes),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary,
                             )
+                            Icon(
+                                if (statsExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                contentDescription = if (statsExpanded) "Ocultar detalle" else "Ver detalle",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
                         }
-                        // Top 5 plataformas por tamaño
-                        stats.byPlatform.take(5).forEach { p ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 6.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
+                    }
+                    // Detalle: top 5 plataformas por tamaño
+                    if (statsExpanded) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                                .padding(bottom = 12.dp),
+                        ) {
+                            stats.byPlatform.take(5).forEach { p ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(
+                                        p.platformSlug,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(
+                                        "${p.romCount} · ${formatStatsBytes(p.totalBytes)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            if (stats.byPlatform.size > 5) {
                                 Text(
-                                    p.platformSlug,
+                                    "+ ${stats.byPlatform.size - 5} plataformas más",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Text(
-                                    "${p.romCount} · ${formatStatsBytes(p.totalBytes)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 4.dp),
                                 )
                             }
-                        }
-                        if (stats.byPlatform.size > 5) {
-                            Text(
-                                "+ ${stats.byPlatform.size - 5} plataformas más",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
                         }
                     }
                 }
