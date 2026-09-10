@@ -25,14 +25,17 @@ import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material.icons.outlined.SystemUpdateAlt
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -59,6 +62,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import es.davidrg.rommsync.RomMSyncApplication
+import es.davidrg.rommsync.data.update.UpdateCheckResult
+import es.davidrg.rommsync.data.update.UpdateDownloadState
 import es.davidrg.rommsync.ui.components.FolderPickerDialog
 import es.davidrg.rommsync.ui.viewmodel.ConfigViewModel
 import es.davidrg.rommsync.ui.viewmodel.LibraryScanState
@@ -73,12 +78,23 @@ fun ConfigScreen() {
 
     val viewModel: ConfigViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { ConfigViewModel(container.settingsRepository, container.romRepository, container.saveSyncManager) }
+            initializer {
+                ConfigViewModel(
+                    container.settingsRepository,
+                    container.romRepository,
+                    container.saveSyncManager,
+                    container.appUpdateChecker,
+                    container.apkInstallHelper,
+                )
+            }
         }
     )
 
     val settings by viewModel.settings.collectAsState()
     val scanState by viewModel.scanState.collectAsState()
+    val updateCheckState by viewModel.updateCheckState.collectAsState()
+    val updateDownloadState by viewModel.updateDownloadState.collectAsState()
+    val isChecking by viewModel.isCheckingUpdate.collectAsState()
     val compact = es.davidrg.rommsync.ui.components.rememberWindowInfo().isCompact
     rememberNotificationPermissionState()
 
@@ -512,6 +528,148 @@ fun ConfigScreen() {
                             viewModel.setSaveSyncEnabled(enabled)
                         },
                     )
+                }
+            }
+
+            // ── Actualizaciones ────────────────────────────────────────
+            SettingsSection(
+                icon = Icons.Outlined.SystemUpdateAlt,
+                title = "Actualizaciones",
+            ) {
+                Text(
+                    "Versión instalada: ${viewModel.currentVersion}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                FilledTonalButton(
+                    onClick = { viewModel.checkForUpdates() },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isChecking,
+                ) {
+                    if (isChecking) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            Icons.Outlined.SystemUpdateAlt,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text("Buscar actualizaciones")
+                }
+
+                when (val r = updateCheckState) {
+                    is UpdateCheckResult.UpdateAvailable -> {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "Nueva versión disponible: ${r.latestVersion}",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "Tamaño: ${"%.1f".format(r.apkSize / 1024f / 1024f)} MB",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        when (val d = updateDownloadState) {
+                            is UpdateDownloadState.Downloading -> {
+                                LinearProgressIndicator(
+                                    progress = { d.progress },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "Descargando… ${"%.0f".format(d.progress * 100)}%",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            is UpdateDownloadState.ReadyToInstall -> {
+                                Button(
+                                    onClick = { viewModel.installUpdate() },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.SystemUpdateAlt,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(modifier = Modifier.size(6.dp))
+                                    Text("Instalar ahora")
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "Android pedirá confirmación. Si es la primera vez, " +
+                                        "concede el permiso «Instalar apps desconocidas» a RomM Sync.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            is UpdateDownloadState.Error -> {
+                                Text(
+                                    "Error: ${d.message}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                FilledTonalButton(
+                                    onClick = { viewModel.downloadUpdate() },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text("Reintentar descarga")
+                                }
+                            }
+                            UpdateDownloadState.Idle -> {
+                                FilledTonalButton(
+                                    onClick = { viewModel.downloadUpdate() },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.DownloadForOffline,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(modifier = Modifier.size(6.dp))
+                                    Text("Descargar ${r.latestVersion}")
+                                }
+                            }
+                        }
+                    }
+                    is UpdateCheckResult.Error -> {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Error: ${r.message}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    UpdateCheckResult.UpToDate -> {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Outlined.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.size(6.dp))
+                            Text(
+                                "Estás en la última versión",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.secondary,
+                            )
+                        }
+                    }
+                    null -> {}
                 }
             }
 

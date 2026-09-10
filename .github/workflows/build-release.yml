@@ -37,19 +37,33 @@ jobs:
         run: chmod +x gradlew
 
       # ── Inject version into build.gradle.kts ──────────────────────────
-      # Versioning: v{MAJOR}.{MINOR}.{run_number}
+      # Versioning: the GitHub tag and APK versionName come EXACTLY from
+      # versionName in app/build.gradle.kts (e.g. "0.4.2" → tag v0.4.2), so
+      # releases and app version always match. versionCode stays tied to
+      # run_number because Android requires a monotonically increasing
+      # integer for in-place updates.
       - name: Compute version
         id: version
         run: |
-          MAJOR="0"
-          MINOR="1"
-          PATCH="${{ github.run_number }}"
-          TAG="v${MAJOR}.${MINOR}.${PATCH}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${MAJOR}.${MINOR}.${PATCH}" >> "$GITHUB_OUTPUT"
-          sed -i "s/versionCode = .*/versionCode = ${PATCH}/" app/build.gradle.kts
-          sed -i "s/versionName = .*/versionName = \\\"${MAJOR}.${MINOR}.${PATCH}\\\"/" app/build.gradle.kts
-          echo "✅ Set versionCode=$PATCH versionName=${MAJOR}.${MINOR}.${PATCH}"
+          VERSION="$(grep -oP 'versionName = "\K[0-9]+\.[0-9]+\.[0-9]+' app/build.gradle.kts | head -1)"
+          if [ -z "$VERSION" ]; then
+            echo "❌ Could not parse a MAJOR.MINOR.PATCH versionName from app/build.gradle.kts" >&2
+            exit 1
+          fi
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          sed -i "s/versionCode = .*/versionCode = ${{ github.run_number }}/" app/build.gradle.kts
+          echo "✅ tag=v${VERSION} versionCode=${{ github.run_number }} (run_number)"
+
+      # Rebuilding the same version must not fail on an existing tag/release:
+      # delete the previous release and tag so the step below recreates them.
+      - name: Clear previous release for this tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.version.outputs.version }}
+        run: |
+          echo "Cleaning release/tag ${TAG} if it exists..."
+          gh release delete "$TAG" --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || echo "(no previous release)"
 
       # ── Signing keystore ──────────────────────────────────────────────
       # If SIGNING_KEYSTORE_BASE64 secret is set, decode it into a real keystore.
@@ -107,13 +121,9 @@ jobs:
           body: |
             **RomM Sync Android** – APK generado automáticamente
 
-            **Commit:** [`${{ github.sha }}`](https://github.com/${{ github.repository }}/commit/${{ github.sha }}`)
+            **Commit:** [`${{ github.sha }}`](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
 
             **Build type:** Release (R8 minified + resource shrinking)
 
-            **Para instalar:**
-            1. Descarga el APK desde los adjuntos de esta release
-            2. Transfiérelo a tu dispositivo Android
-            3. Activa *Instalar desde orígenes desconocidos* si es necesario
-            4. Abre el archivo `.apk` para iniciar la instalación
+            **Para actualizar:** Configuración → Actualizaciones → *Buscar actualizaciones*, o descarga el APK adjunto y ábrelo — se instala encima sin perder datos.
           files: app/build/outputs/apk/release/app-release.apk

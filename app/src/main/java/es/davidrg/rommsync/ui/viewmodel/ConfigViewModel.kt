@@ -2,10 +2,15 @@ package es.davidrg.rommsync.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import es.davidrg.rommsync.BuildConfig
 import es.davidrg.rommsync.data.local.ServerConfig
 import es.davidrg.rommsync.data.repository.RomRepository
 import es.davidrg.rommsync.data.repository.SettingsRepository
 import es.davidrg.rommsync.data.sync.SaveSyncManager
+import es.davidrg.rommsync.data.update.ApkInstallHelper
+import es.davidrg.rommsync.data.update.AppUpdateChecker
+import es.davidrg.rommsync.data.update.UpdateCheckResult
+import es.davidrg.rommsync.data.update.UpdateDownloadState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +23,8 @@ class ConfigViewModel(
     private val settingsRepository: SettingsRepository,
     private val romRepository: RomRepository? = null,
     private val saveSyncManager: SaveSyncManager? = null,
+    private val updateChecker: AppUpdateChecker? = null,
+    private val apkInstallHelper: ApkInstallHelper? = null,
 ) : ViewModel() {
 
     val settings: StateFlow<ServerConfig> = settingsRepository.settings
@@ -26,6 +33,51 @@ class ConfigViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = ServerConfig("", "", "", 2),
         )
+
+    // ── Actualizaciones desde GitHub Releases ──────────────────────────
+    // null = aún no se ha comprobado nada en esta sesión.
+    private val _updateCheckState = MutableStateFlow<UpdateCheckResult?>(null)
+    val updateCheckState: StateFlow<UpdateCheckResult?> = _updateCheckState.asStateFlow()
+
+    private val _isCheckingUpdate = MutableStateFlow(false)
+    val isCheckingUpdate: StateFlow<Boolean> = _isCheckingUpdate.asStateFlow()
+
+    val updateDownloadState: StateFlow<UpdateDownloadState> =
+        apkInstallHelper?.downloadState ?: MutableStateFlow(UpdateDownloadState.Idle)
+
+    /** Version currently installed on this device. */
+    val currentVersion: String = BuildConfig.VERSION_NAME
+
+    /** Queries GitHub for the latest release and updates [updateCheckState]. */
+    fun checkForUpdates() {
+        val checker = updateChecker ?: return
+        if (_isCheckingUpdate.value) return
+        _isCheckingUpdate.value = true
+        viewModelScope.launch {
+            _updateCheckState.value = checker.check()
+            _isCheckingUpdate.value = false
+        }
+    }
+
+    /** Starts the APK download for the latest known update, if any. */
+    fun downloadUpdate() {
+        val helper = apkInstallHelper ?: return
+        val update = _updateCheckState.value as? UpdateCheckResult.UpdateAvailable ?: return
+        viewModelScope.launch { helper.download(update) }
+    }
+
+    /** Opens the system installer with the downloaded APK. */
+    fun installUpdate() {
+        val helper = apkInstallHelper ?: return
+        val ready = helper.downloadState.value as? UpdateDownloadState.ReadyToInstall ?: return
+        helper.launchInstaller(ready.apkFile)
+    }
+
+    /** Discards a downloaded update APK and resets the section. */
+    fun cancelUpdate() {
+        val helper = apkInstallHelper ?: return
+        helper.cleanup()
+    }
 
     // ── Escaneo de biblioteca ──────────────────────────────────────────
     private val _scanState = MutableStateFlow<LibraryScanState>(LibraryScanState.Idle)

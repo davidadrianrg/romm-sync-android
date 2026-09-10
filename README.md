@@ -1,217 +1,136 @@
-# RomM Sync - Cliente Android
+<div align="center">
 
-Cliente de sincronización minimalista para servidores **RomM**. Aplicación Android nativa en Kotlin con Jetpack Compose que actúa exclusivamente como cliente de descarga y sincronización de ROMs, **no como lanzador de juegos**.
+# 🎮 RomM Sync — Cliente Android
 
-## ✨ Características
+**Descarga y sincroniza tu biblioteca de [RomM](https://github.com/rommapp/romm) en cualquier dispositivo Android.**
 
-- **Descarga directa** de ROMs desde un servidor RomM a la estructura de carpetas de ES-DE
-- **Eliminación de descargas** que borra el ROM del disco y lo desmarca como descargado
-- **Sincronización bidireccional de saves** con el servidor (RetroArch, melonDS, PPSSPP, AetherSX2, Dolphin, Eden, Azahar, Cemu y juegos nativos Android)
-- **Autenticación por API Key** (sin login OAuth/CSRF)
-- **Motor de descarga resilient** con WorkManager + CoroutineWorker
-- **Soporte mod_zip** para descargas dinámicas sin tamaño fijo
-- **Configuración de emulador por plataforma** con ruta de saves personalizable mediante selector de carpetas
-- **UI minimalista** optimizada para pantallas táctiles de consolas portátiles
+Cliente Android nativo (Kotlin + Jetpack Compose) para servidores RomM: explora tu biblioteca, descarga ROMs directamente a la estructura de carpetas de tu frontend favorito y mantiene las partidas guardadas sincronizadas entre todos tus dispositivos — portátil Android, Steam Deck, PC.
 
-## 🛠️ Stack Tecnológico
+**Optimizado para consolas portátiles Android** (Anbernic, Retroid Pocket, Miyoo companion...) con pantalla táctil: UI oscura, botones grandes y navegación pensada para dedos, no para ratón.
 
-- **Lenguaje:** Kotlin
-- **UI:** Jetpack Compose + Material Design 3 (tema dinámico oscuro/claro)
-- **Red:** Retrofit 2 + OkHttp 4 (interceptores de progreso)
-- **Background:** WorkManager + CoroutineWorker
-- **DB Local:** Room
-- **Imágenes:** Coil
-- **Config:** Jetpack DataStore
+</div>
 
-## 📋 Fases de Desarrollo
+---
 
-### Fase 1 — Arquitectura, Permisos y Almacenamiento (Scoped Storage)
+## 📥 Instalación
 
-- Declaración de permisos: `INTERNET`, `FOREGROUND_SERVICE`, `POST_NOTIFICATIONS`, `MANAGE_EXTERNAL_STORAGE`
-- Onboarding para solicitud del permiso especial `MANAGE_EXTERNAL_STORAGE`
-- Configuración de ruta raíz ES-DE mediante DataStore
+### Opción A — Desde la app (recomendado)
 
-### Fase 2 — Red y Conectividad con la API de RomM
+1. Descarga e instala el último APK desde [GitHub Releases](https://github.com/davidadrianrg/romm-sync-android/releases/latest).
+2. Configura tu servidor (ver abajo).
+3. En **Configuración → Actualizaciones**, pulsa *Buscar actualizaciones* cada vez que quieras comprobar si hay versión nueva. La app descarga el APK y lanza el instalador de Android — sin salir de la aplicación.
 
-- Autenticación persistente mediante API Key (`rmm_...`)
-- Interceptor OkHttp para inyección del token Bearer
-- Endpoints Retrofit:
-  - `GET /api/platforms` — plataformas disponibles (slug)
-  - `GET /api/roms?platform_ids=[id]&limit=50&offset=0` — juegos paginados
-- ⚠️ Usar `platform_ids` (plural), no `platform_id`
-- ⚠️ Paginación obligatoria (`limit` + `offset`) para evitar OOM en bibliotecas grandes
+> ⚠️ La primera vez, Android pedirá conceder a RomM Sync el permiso **«Instalar apps desconocidas»**. Es el permiso estándar para auto-actualizarse cualquier app fuera de Play Store.
 
-### Fase 3 — Motor de Descarga Asíncrono (WorkManager + mod_zip)
+### Opción B — Compilar desde código
 
-- `CoroutineWorker` para procesar cola de descargas
-- Streaming directo a disco (sin cargar archivo completo en RAM)
-- Progreso dinámico vía `setProgress()` cuando `Content-Length > 0`
-- Soporte mod_zip: `ZipInputStream` + descompresión al vuelo cuando `Content-Length = -1`
+```bash
+git clone https://github.com/davidadrianrg/romm-sync-android.git
+cd romm-sync-android
+./gradlew assembleDebug
+# APK → app/build/outputs/apk/debug/app-debug.apk
+```
 
-### Fase 4 — Mapeo Estructural ES-DE
+Requisitos: JDK 17 y Android SDK (API 35). Para firmar tu propio release, crea `keystore.properties` en la raíz (está en `.gitignore`):
 
-- Normalización de carpetas por slug de plataforma en minúsculas:
-  - `snes` → `/ROMs/snes/`
-  - `megadrive` → `/ROMs/megadrive/`
+```properties
+storeFile=/ruta/a/tu.keystore
+storePassword=***
+keyAlias=***
+keyPassword=***
+```
 
-### Fase 5 — Interfaz de Usuario Minimalista
+## ⚙️ Configuración inicial (2 minutos)
 
-| Vista | Descripción |
+| Qué | Valor |
 |---|---|
-| **Configuración** | URL servidor, API Key, directorio raíz y descargas simultáneas, agrupados en secciones (Cards) con iconos |
-| **Plataformas** | Tarjetas con avatar de inicial y switches mostrar/ocultar por plataforma; cabecera con resumen y acción de actualizar |
-| **Biblioteca** | Rejilla de carátulas con Coil, título superpuesto sobre degradado, badges de estado, búsqueda + filtros (Todos/Faltantes/Descargados). El aspect ratio de las carátulas se **mide de las dimensiones reales** de una muestra de covers por plataforma (mediana) y se cachea, en vez de fiarse del valor del servidor. Pulsación larga abre el detalle con opción de eliminar la descarga. En horizontal, los controles se agrupan en una sola fila para maximizar el área de carátulas |
-| **Cola de Descargas** | Tarjetas con badge de estado por color, barra de progreso animada, estado indeterminate para mod_zip, cancelar y reintentar |
+| **URL del servidor** | `https://romm.tudominio.com` (tu instancia RomM 4.9+ para sync) |
+| **API Key** | Token `rmm_...` desde *RomM → User → API Keys* |
+| **Directorio de ROMs** | `/storage/emulated/0/ROMs` (o tu microSD) |
 
-### Fase 6 — Rediseño Visual (Sistema de Diseño)
+La app pide el permiso **«Acceso a todos los archivos»** — lo necesita para escribir las ROMs en las carpetas que espera tu emulador/frontend, sin copiar ni mover nada manualmente.
 
-- **Sistema de color completo** Material 3 ("Midnight Arcade") con esquemas oscuro y claro: roles `primary`/`secondary`/`tertiary` con sus *containers*, tiers de `surfaceContainer` para profundidad, `outline`, `scrim` e `inverse`
-- **Tema adaptable** que sigue el modo del sistema (oscuro por defecto en consolas portátiles) con barras de sistema *edge-to-edge*
-- **Tipografía** con jerarquía ampliada y *letter-spacing* afinado
-- **Componentes basados en Cards** con esquinas redondeadas, badges de estado y *empty states* con icono
-- **Navegación** con iconos *outlined*/*filled* según selección e indicador en `primaryContainer`
+<details>
+<summary><b>¿Por qué API Key y no usuario/contraseña?</b></summary>
 
-### Fase 7 — Sincronización de Saves (Device Sync Protocol)
+RomM admite login OAuth/OIDC tras proxys (Authentik, Authelia...), que suele romper clientes no-web con redirecciones y tokens CSRF. La API Key es un token largo por usuario que funciona siempre, sea cual sea tu setup de autenticación web.
+</details>
 
-Sincronización bidireccional de partidas guardadas con el servidor RomM,
-siguiendo el [Device Sync Protocol](https://docs.romm.app/latest/developers/device-sync-protocol/) (RomM 4.9+).
+## ✨ Qué hace la app
 
-**Flujo del protocolo:**
+- **📚 Biblioteca** — Navega por tu servidor RomM con carátulas, búsqueda y filtros (todos / faltantes / descargados). Detecta juegos ya presentes en disco con *Escanear biblioteca*.
+- **⬇️ Descargas** — Cola con descargas paralelas configurables (1–5), reanudación automática si se corta la red, verificación de integridad por hash y aviso de espacio insuficiente. Opción *solo WiFi* para no gastar datos.
+- **💾 Sincronización de saves** — Tus partidas guardadas siempre al día en todos los dispositivos, con el [Device Sync Protocol](https://docs.romm.app/latest/developers/device-sync-protocol/) de RomM (v4.9+): sube lo que cambió en el portátil, bájate lo que jugaste en el PC. Resuelve conflictos explícitamente en vez de sobrescribir.
+- **🗂️ Exportación de metadatos** — Genera los `gamelist.xml` de ES-DE o copia la media (covers, fanart, logos, screenshots) a la estructura de RetroHRAI.
+- **🔄 Auto-actualización** — Comprueba, descarga e instala nuevas versiones desde GitHub Releases sin desinstalar nada (ver Instalación).
 
-1. Registro del dispositivo (`POST /api/devices`, `device_id` cacheado)
-2. Negociación (`POST /api/sync/negotiate`): el cliente envía sus saves (nombre, mtime, sha1) y el servidor responde con operaciones `upload`/`download`/`conflict`/`noop`
-3. Ejecución (`POST /api/saves`, `GET /api/saves/{id}/content`)
-4. Cierre de sesión (`POST /api/sync/sessions/{id}/complete`)
+### Emuladores soportados para sync de saves
 
-**Handlers por emulador** (patrón Strategy en `data/sync/platform/`):
+| Plataforma | Emulador (por defecto) |
+|---|---|
+| Retro (NES–N64, GBA, PSX...) | RetroArch |
+| Nintendo DS | melonDS |
+| PSP | PPSSPP |
+| PS2 | AetherSX2 / NetherSX2 |
+| GameCube / Wii | Dolphin |
+| 3DS | Azahar |
+| Wii U | Cemu |
+| Switch | Eden |
+| Juegos nativos Android | ruta configurable por juego |
 
-| Plataforma | Emulador (defecto) | Estructura de saves |
-|---|---|---|
-| Retro (NES-N64, GBA, PSX...) | RetroArch | `{base}/saves/{slug}/{rom}.srm` y `states/{slug}/{rom}.state*` (slugs ES-DE) |
-| DS | melonDS (o RetroArch) | `{base}/{rom}.sav` plano |
-| PSP | PPSSPP | `{base}/PSP/SAVEDATA/{discId}*` (carpetas agrupadas en zip) |
-| PS2 | AetherSX2/NetherSX2 | `{base}/memcards/{card}.ps2/{BAserial}/` (folder memory card) |
-| GameCube | Dolphin | `{base}/GC/{region}/Card A/{gameId}*.gci` |
-| Wii | Dolphin | `{base}/Wii/title/{high}/{low}/data/` |
-| 3DS | Azahar | `{base}/{id0}/{id1}/title/{high}/{low}/data/` (carpeta zipeada) |
-| Wii U | Cemu | `{base}/{titleIdLow}/user/...` (carpeta zipeada) |
-| Switch | Eden | `{base}/nand/user/save/{userId}/{profileId}/{titleId}/` |
-| Android (nativo) | Nativo Android | Ruta configurable por juego (carpeta zipeada) |
+> 💡 PS2 requiere activar **Folder Memory Card** en el emulador para sincronizar por juego.
 
-**Configuración:** desde la pestaña Plataformas, cada plataforma permite elegir
-emulador y una ruta de saves personalizada (override) que se selecciona con el
-explorador de archivos del sistema. La ruta base de RetroArch
-se configura en Configuración. La sincronización se dispara manualmente con el
-botón "Sincronizar ahora" y corre como `CoroutineWorker` con notificación
-foreground. La sección "Cambios pendientes" muestra solo saves que difieren del
-último estado sincronizado (comparación local por SHA-1).
+## 🖼️ Permisos que usa y por qué
 
-> ⚠️ Para PS2 se requiere activar **Folder Memory Card** en el emulador para
-> sincronizar por juego (en vez de una memory card monolítica de 8 MB).
+| Permiso | Motivo |
+|---|---|
+| Acceso a todos los archivos | Escribir ROMs/metadata en las carpetas que leen los emuladores |
+| Instalar apps desconocidas | Solo si usas la auto-actualización: instala el APK que ella misma descarga |
+| Notificaciones | Progreso de descargas y sincronización en segundo plano |
+| Ignorar optimización de batería | Que la sincronización periódica no la mate el sistema |
+| Internet | Hablar con tu servidor RomM y con GitHub (comprobar updates) |
 
-> ℹ️ Para juegos nativos Android, la ruta de saves debe configurarse
-> manualmente por juego (`savesPathOverride`) ya que cada app guarda en una
-> ubicación diferente. El handler zipea toda la carpeta indicada.
+Sin telemetría, sin analytics, sin cuentas: tus datos van de tu dispositivo a **tu** servidor.
 
-## 🏗️ Arquitectura
+## 🏗️ Arquitectura (para contribuir)
 
 ```
 app/src/main/java/es/davidrg/rommsync/
-├── RomMSyncApplication.kt     # Application + Configuration.Provider (WorkManager)
-├── MainActivity.kt            # Single-activity host (Compose)
 ├── data/
-│   ├── AppContainer.kt        # Manual DI container
-│   ├── local/
-│   │   ├── SettingsDataStore.kt    # DataStore (server config persistente)
-│   │   ├── RomSyncDatabase.kt      # Room database
-│   │   ├── entity/                 # PlatformEntity, DownloadedRomEntity
-│   │   └── dao/                    # PlatformDao, RomDao
-│   ├── remote/
-│   │   ├── RomMApiService.kt       # Retrofit endpoints (platforms, roms, download)
-│   │   ├── AuthInterceptor.kt      # OkHttp Bearer token injection
-│   │   ├── NetworkModule.kt        # Retrofit/OkHttp factory
-│   │   └── dto/                    # PlatformDto, RomDto (Moshi)
-│   └── repository/
-│       ├── RomRepository.kt        # RomM data bridge (remote + cache)
-│       └── SettingsRepository.kt
-├── domain/model/                   # Platform, Rom, DownloadTask (pure domain)
-├── download/
-│   ├── DownloadWorker.kt           # CoroutineWorker (stream + mod_zip extract)
-│   ├── DownloadManager.kt          # WorkManager queue management
-│   └── PathMapper.kt               # RomM slug → ES-DE folder mapping
-├── data/sync/
-│   ├── SyncCoordinator.kt          # Orquesta negotiate → execute → complete
-│   ├── SaveSyncWorker.kt           # CoroutineWorker de sincronización
-│   ├── SaveSyncManager.kt          # API para la UI (trigger + estado)
-│   ├── SyncedHashStore.kt          # Cache local de hashes sincronizados
-│   └── platform/                   # Handlers por emulador (Strategy)
-│       ├── SaveHandler.kt          # Interfaz base + LocalSave
-│       ├── SaveHandlerRegistry.kt  # Selección de handler por plataforma/emulador
-│       ├── RetroArchSaveHandler.kt
-│       ├── MelonDsSaveHandler.kt
-│       ├── PpssppSaveHandler.kt
-│       ├── Ps2SaveHandler.kt
-│       ├── DolphinSaveHandler.kt
-│       ├── N3dsSaveHandler.kt
-│       ├── CemuSaveHandler.kt
-│       ├── SwitchSaveHandler.kt
-│       └── AndroidSaveHandler.kt
-├── ui/
-│   ├── theme/                      # Material3 dark-first theme
-│   ├── navigation/                 # NavHost + bottom bar (4 tabs)
-│   ├── viewmodel/                  # ConfigVM, PlatformsVM, LibraryVM, DownloadsVM
-│   └── screens/                    # Config, Platforms, Library, Downloads
-└── util/Permissions.kt             # MANAGE_EXTERNAL_STORAGE + notifications
+│   ├── AppContainer.kt        # DI manual (sin Hilt)
+│   ├── local/                 # Room + DataStore (config persistente)
+│   ├── remote/                # Retrofit + OkHttp (API RomM)
+│   ├── repository/            # Puente remote ↔ cache
+│   ├── sync/                  # Device Sync Protocol + handlers por emulador
+│   │   └── platform/          # Strategy: RetroArch, melonDS, PPSSPP...
+│   ├── metadata/              # Exportación gamelist.xml / media
+│   └── update/                # Auto-actualización desde GitHub Releases
+├── domain/model/              # Platform, Rom, DownloadTask
+├── download/                  # WorkManager + descarga con reanudación
+├── ui/                        # Compose Material3 (screens/viewmodel/components)
+└── util/                      # Permisos, lectura de cabeceras ROM
 ```
 
-## 🔧 Configuración del Servidor RomM
+- **Stack**: Kotlin · Jetpack Compose (Material 3) · Retrofit/OkHttp · Room · WorkManager · DataStore · Coil · Moshi
+- **Idioma del código**: inglés en identificadores/logs; español en textos de UI.
+- **Tests**: `./gradlew test` (unit tests en `app/src/test`).
 
-La app requiere:
+## 🔁 CI/CD
 
-- **ROMM_BASE_URL:** Dirección del servidor (ej: `https://romm.midominio.com`)
-- **API Key:** Token de usuario con formato `rmm_...`
+Cada push a `master`:
 
-No se solicita usuario/contraseña — solo autenticación por API Key para evitar bloqueos de sesión OAuth/CSRF y problemas de redirección OIDC (Authentik, Authelia).
+1. **CI** (`.github/workflows/ci.yml`): tests + build debug.
+2. **Release** (`.github/workflows/build-release.yml`): build firmado (R8) → GitHub Release. El tag y el `versionName` del APK coinciden **exactamente** con `versionName` de `app/build.gradle.kts` (p. ej. `0.4.2` → `v0.4.2`); búmpalo ahí para publicar una versión nueva. El `versionCode` interno usa el `run_number` del workflow, que siempre crece (Android lo exige para actualizar sin desinstalar). Repetir una versión reemplaza su release.
 
-## 📁 Estructura Local
+El APK de release se firma con una clave fija (secrets `SIGNING_KEYSTORE_BASE64` y derivados) para que las actualizaciones se instalen sobre la versión anterior sin desinstalar. **Guarda copia del keystore**: si se pierde, los usuarios tendrían que desinstalar para actualizar.
 
-```
-/storage/emulated/0/ROMs/   (o ruta configurada de microSD)
-├── snes/
-│   ├── Super Mario World.sfc
-│   └── ...
-├── megadrive/
-│   ├── Sonic the Hedgehog.bin
-│   └── ...
-└── ...
-```
+## 🤝 Contribuir
 
-## 🔐 Compilación y Firma (CI/CD)
+1. Fork + rama (`feat/mi-cosa`).
+2. `./gradlew test` en verde.
+3. PR a `master` — CI debe pasar.
 
-Cada push a `master` dispara el workflow de GitHub Actions que compila el APK de release (R8 + shrink) y lo publica como GitHub Release.
-
-### Firma estable
-
-El APK se firma siempre con **una clave de release fija** para que las actualizaciones se instalen encima de la versión anterior sin el error de *"conflicto de paquete"* (Android rechaza actualizar si cambia el certificado de firma).
-
-La clave se inyecta en CI mediante *secrets* del repositorio (Settings → Secrets and variables → Actions):
-
-| Secret | Descripción |
-|---|---|
-| `SIGNING_KEYSTORE_BASE64` | Keystore (`.jks`) codificado en base64 |
-| `SIGNING_STORE_PASSWORD` | Contraseña del almacén |
-| `SIGNING_KEY_ALIAS` | Alias de la clave (`romm-sync`) |
-| `SIGNING_KEY_PASSWORD` | Contraseña de la clave |
-
-> ⚠️ El keystore y sus contraseñas son críticos: guárdalos con copia de seguridad. Si se pierden, no se pueden volver a publicar actualizaciones (obligaría a desinstalar/reinstalar en cada versión).
-
-### Build local
-
-Para firmar en local, crea un `keystore.properties` en la raíz (ignorado por git) con `storeFile`, `storePassword`, `keyAlias` y `keyPassword`. Si no existe, el build de release usa la clave de debug.
-
-```bash
-./gradlew assembleRelease
-```
+Errores, ideas y PRs bienvenidos en [Issues](https://github.com/davidadrianrg/romm-sync-android/issues).
 
 ## 📄 Licencia
 
