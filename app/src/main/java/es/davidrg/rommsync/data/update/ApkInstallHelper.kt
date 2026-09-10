@@ -3,6 +3,8 @@ package es.davidrg.rommsync.data.update
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +23,21 @@ sealed class UpdateDownloadState {
     data class Downloading(val progress: Float, val downloadedBytes: Long, val totalBytes: Long) : UpdateDownloadState()
     data class ReadyToInstall(val apkFile: File) : UpdateDownloadState()
     data class Error(val message: String) : UpdateDownloadState()
+}
+
+/**
+ * Resultado de intentar lanzar el instalador del sistema.
+ */
+sealed class InstallLaunchResult {
+    /** El instalador del sistema se abrió con el APK. */
+    data object Started : InstallLaunchResult()
+
+    /** Falta el permiso "Instalar apps desconocidas": se abrió Ajustes
+     *  para concederlo. El usuario debe volver a pulsar Instalar después. */
+    data object NeedsPermission : InstallLaunchResult()
+
+    /** No se pudo lanzar (uri/intent falló). */
+    data class Error(val message: String) : InstallLaunchResult()
 }
 
 /**
@@ -108,10 +125,32 @@ class ApkInstallHelper(
 
     /**
      * Fires the system package-installer intent for [apkFile].
-     * Requires the user to have granted "install unknown apps" for this app
-     * (Android 8+); the OS will prompt automatically if not yet granted.
+     *
+     * Si el dispositivo aún no concedió a la app el permiso "Instalar apps
+     * desconocidas" (Android 8+), abre la pantalla de Ajustes específica
+     * para concederlo y devuelve [InstallLaunchResult.NeedsPermission]:
+     * el usuario debe volver a pulsar "Instalar" tras concederlo.
      */
-    fun launchInstaller(apkFile: File): Boolean {
+    fun launchInstaller(apkFile: File): InstallLaunchResult {
+        // 1. Permiso de instalación de orígenes desconocidos (API 26+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !context.packageManager.canRequestPackageInstalls()
+        ) {
+            val settingsIntent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:${context.packageName}"),
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            return try {
+                context.startActivity(settingsIntent)
+                InstallLaunchResult.NeedsPermission
+            } catch (e: Exception) {
+                InstallLaunchResult.Error(
+                    "No se pudo abrir Ajustes para el permiso de instalación",
+                )
+            }
+        }
+
+        // 2. Lanzar el instalador con el APK descargado
         val uri = try {
             FileProvider.getUriForFile(
                 context,
@@ -119,17 +158,21 @@ class ApkInstallHelper(
                 apkFile,
             )
         } catch (e: Exception) {
-            return false
+            return InstallLaunchResult.Error("No se pudo preparar el APK: ${e.message}")
         }
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // Obligatorio al lanzar desde application context
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         return try {
             context.startActivity(intent)
-            true
+            InstallLaunchResult.Started
         } catch (e: Exception) {
-            false
+            InstallLaunchResult.Error(
+                "Ninguna app pudo abrir el instalador: ${e.message}",
+            )
         }
     }
 

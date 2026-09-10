@@ -95,6 +95,7 @@ fun ConfigScreen() {
     val updateCheckState by viewModel.updateCheckState.collectAsState()
     val updateDownloadState by viewModel.updateDownloadState.collectAsState()
     val isChecking by viewModel.isCheckingUpdate.collectAsState()
+    val installFeedback by viewModel.installFeedback.collectAsState()
     val compact = es.davidrg.rommsync.ui.components.rememberWindowInfo().isCompact
     rememberNotificationPermissionState()
 
@@ -608,10 +609,11 @@ fun ConfigScreen() {
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    "Android pedirá confirmación. Si es la primera vez, " +
-                                        "concede el permiso «Instalar apps desconocidas» a RomM Sync.",
+                                    installFeedback
+                                        ?: "Android pedirá confirmación antes de instalar.",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = if (installFeedback != null) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             is UpdateDownloadState.Error -> {

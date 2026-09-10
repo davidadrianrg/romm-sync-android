@@ -9,6 +9,7 @@ import es.davidrg.rommsync.data.repository.SettingsRepository
 import es.davidrg.rommsync.data.sync.SaveSyncManager
 import es.davidrg.rommsync.data.update.ApkInstallHelper
 import es.davidrg.rommsync.data.update.AppUpdateChecker
+import es.davidrg.rommsync.data.update.InstallLaunchResult
 import es.davidrg.rommsync.data.update.UpdateCheckResult
 import es.davidrg.rommsync.data.update.UpdateDownloadState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +43,10 @@ class ConfigViewModel(
     private val _isCheckingUpdate = MutableStateFlow(false)
     val isCheckingUpdate: StateFlow<Boolean> = _isCheckingUpdate.asStateFlow()
 
+    /** Mensaje de feedback del último intento de lanzar el instalador. */
+    private val _installFeedback = MutableStateFlow<String?>(null)
+    val installFeedback: StateFlow<String?> = _installFeedback.asStateFlow()
+
     val updateDownloadState: StateFlow<UpdateDownloadState> =
         apkInstallHelper?.downloadState ?: MutableStateFlow(UpdateDownloadState.Idle)
 
@@ -70,7 +75,12 @@ class ConfigViewModel(
     fun installUpdate() {
         val helper = apkInstallHelper ?: return
         val ready = helper.downloadState.value as? UpdateDownloadState.ReadyToInstall ?: return
-        helper.launchInstaller(ready.apkFile)
+        when (val result = helper.launchInstaller(ready.apkFile)) {
+            is InstallLaunchResult.Started -> _installFeedback.value = null
+            is InstallLaunchResult.NeedsPermission -> _installFeedback.value =
+                "Concede el permiso «Permitir de esta fuente» en Ajustes y vuelve a pulsar Instalar."
+            is InstallLaunchResult.Error -> _installFeedback.value = result.message
+        }
     }
 
     /** Discards a downloaded update APK and resets the section. */
