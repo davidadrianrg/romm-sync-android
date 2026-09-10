@@ -142,6 +142,7 @@ class SyncCoordinator(
         var completed = 0
         var failed = 0
         val failedRomIds = mutableSetOf<Int>()
+        val failures = mutableListOf<FailedOpInfo>()
         val conflicts = mutableListOf<es.davidrg.rommsync.data.remote.dto.SyncOperation>()
 
         for (op in negotiateResponse.operations) {
@@ -157,10 +158,28 @@ class SyncCoordinator(
                         } else {
                             failed++
                             failedRomIds.add(op.romId)
+                            failures.add(
+                                FailedOpInfo(
+                                    romId = op.romId,
+                                    romName = downloadedRoms.find { it.romId == op.romId }?.name ?: "rom ${op.romId}",
+                                    fileName = op.fileName,
+                                    action = "subida",
+                                    reason = "No se pudo subir al servidor",
+                                ),
+                            )
                         }
                     } else {
                         failed++
                         failedRomIds.add(op.romId)
+                        failures.add(
+                            FailedOpInfo(
+                                romId = op.romId,
+                                romName = downloadedRoms.find { it.romId == op.romId }?.name ?: "rom ${op.romId}",
+                                fileName = op.fileName,
+                                action = "subida",
+                                reason = "El save desapareció del disco antes de subirlo",
+                            ),
+                        )
                     }
                 }
                 "download" -> {
@@ -187,10 +206,28 @@ class SyncCoordinator(
                         } else {
                             failed++
                             failedRomIds.add(op.romId)
+                            failures.add(
+                                FailedOpInfo(
+                                    romId = op.romId,
+                                    romName = downloadedRoms.find { it.romId == op.romId }?.name ?: "rom ${op.romId}",
+                                    fileName = op.fileName,
+                                    action = "descarga",
+                                    reason = "Fallo al descargar o extraer en disco",
+                                ),
+                            )
                         }
                     } else {
                         failed++
                         failedRomIds.add(op.romId)
+                        failures.add(
+                            FailedOpInfo(
+                                romId = op.romId,
+                                romName = downloadedRoms.find { it.romId == op.romId }?.name ?: "rom ${op.romId}",
+                                fileName = op.fileName,
+                                action = "descarga",
+                                reason = "El ROM ya no está descargado en este dispositivo",
+                            ),
+                        )
                     }
                 }
                 "conflict" -> {
@@ -252,6 +289,7 @@ class SyncCoordinator(
                     saveId = op.saveId,
                 )
             },
+            failedDetails = failures,
             message = buildResultMessage(completed, failed, conflicts.size),
         )
     }
@@ -475,7 +513,6 @@ class SyncCoordinator(
         if (conflicts > 0) parts.add("$conflicts conflictos")
         return if (parts.isEmpty()) "Todo sincronizado" else parts.joinToString(", ")
     }
-
     companion object {
         private const val TAG = "SyncCoordinator"
 
@@ -492,11 +529,23 @@ data class SyncResult(
     val downloaded: Int = 0,
     val conflicts: Int = 0,
     val conflictDetails: List<ConflictInfo> = emptyList(),
+    val failedDetails: List<FailedOpInfo> = emptyList(),
     val message: String? = null,
     val error: String? = null,
 ) {
     val isSuccess: Boolean get() = error == null
 }
+
+/**
+ * Detalle de una operación de sync que falló, para mostrar en la UI.
+ */
+data class FailedOpInfo(
+    val romId: Int,
+    val romName: String,
+    val fileName: String,
+    val action: String,
+    val reason: String,
+)
 
 /**
  * Detalle de un conflicto detectado durante la negociación: la copia local

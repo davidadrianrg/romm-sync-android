@@ -48,6 +48,7 @@ class SettingsDataStore(private val context: Context) {
         val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
         val LAST_SYNC_SUMMARY = stringPreferencesKey("last_sync_summary")
         val LAST_SYNC_CONFLICTS_JSON = stringPreferencesKey("last_sync_conflicts_json")
+        val LAST_SYNC_FAILED_JSON = stringPreferencesKey("last_sync_failed_json")
         val SAVE_SYNC_INTERVAL_MINUTES = intPreferencesKey("save_sync_interval_minutes")
         val ESDE_DATA_DIR = stringPreferencesKey("esde_data_dir")
         val RETROHRAI_MEDIA_PATH = stringPreferencesKey("retrohrai_media_path")
@@ -150,6 +151,9 @@ class SettingsDataStore(private val context: Context) {
     val lastSyncConflictsJson: Flow<String> = context.dataStore.data.map {
         it[LAST_SYNC_CONFLICTS_JSON] ?: "[]"
     }
+    val lastSyncFailedJson: Flow<String> = context.dataStore.data.map {
+        it[LAST_SYNC_FAILED_JSON] ?: "[]"
+    }
     val esdeDataDir: Flow<String> = context.dataStore.data.map {
         it[ESDE_DATA_DIR] ?: DEFAULT_ESDE_DATA_DIR
     }
@@ -229,6 +233,10 @@ class SettingsDataStore(private val context: Context) {
      */
     suspend fun setLastSyncConflictsJson(json: String) {
         context.dataStore.edit { it[LAST_SYNC_CONFLICTS_JSON] = json }
+    }
+
+    suspend fun setLastSyncFailedJson(json: String) {
+        context.dataStore.edit { it[LAST_SYNC_FAILED_JSON] = json }
     }
 
     fun getLastSyncConflictsJsonBlocking(): String =

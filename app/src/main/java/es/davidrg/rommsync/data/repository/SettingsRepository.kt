@@ -24,6 +24,7 @@ class SettingsRepository(private val dataStore: SettingsDataStore) {
     val lastSyncTimestamp: Flow<Long> = dataStore.lastSyncTimestamp
     val lastSyncSummary: Flow<String> = dataStore.lastSyncSummary
     val lastSyncConflictsJson: Flow<String> = dataStore.lastSyncConflictsJson
+    val lastSyncFailedJson: Flow<String> = dataStore.lastSyncFailedJson
     val esdeDataDir: Flow<String> = dataStore.esdeDataDir
     val retroHraiMediaPath: Flow<String> = dataStore.retroHraiMediaPath
     val esdeExportEnabled: Flow<Boolean> = dataStore.esdeExportEnabled
@@ -33,6 +34,8 @@ class SettingsRepository(private val dataStore: SettingsDataStore) {
         dataStore.setLastSync(timestamp, summary)
     suspend fun setLastSyncConflicts(json: String) =
         dataStore.setLastSyncConflictsJson(json)
+    suspend fun setLastSyncFailed(json: String) =
+        dataStore.setLastSyncFailedJson(json)
     suspend fun setSaveSyncIntervalMinutes(minutes: Int) =
         dataStore.setSaveSyncIntervalMinutes(minutes)
     suspend fun setEsdeDataDir(path: String) = dataStore.setEsdeDataDir(path)

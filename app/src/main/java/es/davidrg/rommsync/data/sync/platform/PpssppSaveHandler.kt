@@ -6,9 +6,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
 
 /**
  * Handler de saves para PPSSPP (PlayStation Portable).
@@ -53,7 +51,7 @@ class PpssppSaveHandler : SaveHandler {
         // Agrupar todas las carpetas en un zip virtual
         val newestMtime = matchedFolders.maxOf { folderLastModified(it) }
         val zipFile = File.createTempFile("ppsspp_save_${discId}_", ".zip")
-        zipFolders(matchedFolders, zipFile)
+        zipFoldersDeterministic(matchedFolders, zipFile)
 
         results.add(
             LocalSave(
@@ -155,23 +153,6 @@ class PpssppSaveHandler : SaveHandler {
         return newest
     }
 
-    private fun zipFolders(folders: List<File>, output: File) {
-        ZipOutputStream(FileOutputStream(output)).use { zos ->
-            for (folder in folders) {
-                folder.walkTopDown().forEach { file ->
-                    val relativePath = "${folder.name}/${folder.toPath().relativize(file.toPath())}"
-                    if (file.isFile) {
-                        zos.putNextEntry(ZipEntry(relativePath))
-                        file.inputStream().use { it.copyTo(zos) }
-                        zos.closeEntry()
-                    } else if (file != folder) {
-                        zos.putNextEntry(ZipEntry("$relativePath/"))
-                        zos.closeEntry()
-                    }
-                }
-            }
-        }
-    }
 
     companion object {
         const val DEFAULT_SAVES_PATH = "/storage/emulated/0/PSP/SAVEDATA"

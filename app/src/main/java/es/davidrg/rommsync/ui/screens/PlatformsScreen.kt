@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -35,6 +36,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -450,11 +452,15 @@ private fun PlatformCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Override de ruta de saves mediante explorador de carpetas propio
+                // Override de ruta de saves: campo editable + explorador.
+                // Se puede escribir a mano (rutas /data en root) o elegir carpeta.
                 var showFolderPicker by remember { mutableStateOf(false) }
                 val hasOverride = !platform.savesPathOverride.isNullOrBlank()
                 val displayedPath = platform.savesPathOverride?.takeIf { it.isNotBlank() }
                     ?: defaultSavesPath
+                var manualPath by remember(platform.savesPathOverride, defaultSavesPath) {
+                    mutableStateOf(displayedPath)
+                }
 
                 Text(
                     "Ruta de saves",
@@ -463,16 +469,28 @@ private fun PlatformCard(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    displayedPath,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
                     if (hasOverride) "Ruta personalizada" else "Ruta por defecto",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = manualPath,
+                    onValueChange = { manualPath = it },
+                    label = { Text("Ruta de saves") },
+                    placeholder = { Text("/data/data/com.juego/files") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    trailingIcon = {
+                        IconButton(onClick = { showFolderPicker = true }) {
+                            Icon(
+                                Icons.Filled.Folder,
+                                contentDescription = "Seleccionar carpeta",
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    },
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
@@ -491,7 +509,14 @@ private fun PlatformCard(
                         Spacer(modifier = Modifier.size(6.dp))
                         Text("Seleccionar carpeta")
                     }
-                    if (hasOverride) {
+                    if (manualPath != displayedPath) {
+                        Button(
+                            onClick = { onSavesPathChange(platform.id, manualPath.trim()) },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Guardar ruta")
+                        }
+                    } else if (hasOverride) {
                         TextButton(
                             onClick = { onSavesPathChange(platform.id, null) },
                         ) {

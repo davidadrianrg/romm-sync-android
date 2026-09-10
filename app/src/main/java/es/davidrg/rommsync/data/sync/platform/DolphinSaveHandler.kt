@@ -121,13 +121,7 @@ class DolphinSaveHandler : SaveHandler {
 
         val newestMtime = gciFiles.maxOf { it.lastModified() }
         val zipFile = File.createTempFile("dolphin_gc_${gameId}_", ".zip")
-        ZipOutputStream(FileOutputStream(zipFile)).use { zos ->
-            for (gci in gciFiles) {
-                zos.putNextEntry(ZipEntry(gci.name))
-                gci.inputStream().use { it.copyTo(zos) }
-                zos.closeEntry()
-            }
-        }
+        zipFilesDeterministic(gciFiles, zipFile)
 
         results.add(
             LocalSave(
@@ -195,7 +189,7 @@ class DolphinSaveHandler : SaveHandler {
         val gameSaveDir = dataDir.parentFile ?: return
         val newestMtime = folderLastModified(gameSaveDir)
         val zipFile = File.createTempFile("dolphin_wii_${gameId}_", ".zip")
-        zipFolderRelativeTo(root = wiiTitleDir, folder = gameSaveDir, output = zipFile)
+        zipFolderRelativeToDeterministic(root = wiiTitleDir, folder = gameSaveDir, output = zipFile)
 
         results.add(
             LocalSave(
@@ -292,22 +286,6 @@ class DolphinSaveHandler : SaveHandler {
      * [root]. Se usa para Wii, donde el save debe conservar la estructura
      * `{high}/{low}/data/...` colgando de `Wii/title` para restaurarse bien.
      */
-    private fun zipFolderRelativeTo(root: File, folder: File, output: File) {
-        ZipOutputStream(FileOutputStream(output)).use { zos ->
-            folder.walkTopDown().forEach { file ->
-                val relativePath = root.toPath().relativize(file.toPath()).toString()
-                if (relativePath.isEmpty()) return@forEach
-                if (file.isFile) {
-                    zos.putNextEntry(ZipEntry(relativePath))
-                    file.inputStream().use { it.copyTo(zos) }
-                    zos.closeEntry()
-                } else if (file != folder) {
-                    zos.putNextEntry(ZipEntry("$relativePath/"))
-                    zos.closeEntry()
-                }
-            }
-        }
-    }
 
     companion object {
         const val DEFAULT_GC_SAVES_PATH =

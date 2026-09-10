@@ -5,9 +5,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
 
 /**
  * Handler de saves para Wii U (Cemu).
@@ -48,7 +46,7 @@ class CemuSaveHandler : SaveHandler {
 
         val newestMtime = files.maxOf { it.lastModified() }
         val zipFile = File.createTempFile("wiiu_save_${titleIdLow}_", ".zip")
-        zipFolder(saveDir, zipFile)
+        zipFolderDeterministic(saveDir, zipFile)
 
         results.add(
             LocalSave(
@@ -64,6 +62,16 @@ class CemuSaveHandler : SaveHandler {
     }
 
     override suspend fun prepareForUpload(save: LocalSave): File = save.file
+
+    override suspend fun savesFingerprint(
+        romId: Int, romFileName: String, platformSlug: String,
+        savesBasePath: String, romLocalPath: String?,
+    ): String? = withContext(Dispatchers.IO) {
+        val titleId = extractTitleId(romFileName) ?: return@withContext null
+        val titleIdLow = titleId.takeLast(8)
+        val saveDir = findSaveDir(savesBasePath, titleIdLow) ?: return@withContext null
+        folderFingerprint(saveDir)
+    }
 
     override suspend fun extractDownload(
         tempFile: File,
@@ -132,21 +140,6 @@ class CemuSaveHandler : SaveHandler {
         return match?.groupValues?.get(1)?.uppercase()
     }
 
-    private fun zipFolder(folder: File, output: File) {
-        ZipOutputStream(FileOutputStream(output)).use { zos ->
-            folder.walkTopDown().forEach { file ->
-                val relativePath = "${folder.name}/${folder.toPath().relativize(file.toPath())}"
-                if (file.isFile) {
-                    zos.putNextEntry(ZipEntry(relativePath))
-                    file.inputStream().use { it.copyTo(zos) }
-                    zos.closeEntry()
-                } else if (file != folder) {
-                    zos.putNextEntry(ZipEntry("$relativePath/"))
-                    zos.closeEntry()
-                }
-            }
-        }
-    }
 
     companion object {
         const val DEFAULT_SAVES_PATH =

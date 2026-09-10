@@ -7,6 +7,7 @@ import es.davidrg.rommsync.data.local.dao.PlatformDao
 import es.davidrg.rommsync.data.local.dao.RomDao
 import es.davidrg.rommsync.data.repository.SettingsRepository
 import es.davidrg.rommsync.data.sync.ConflictInfo
+import es.davidrg.rommsync.data.sync.FailedOpInfo
 import es.davidrg.rommsync.data.sync.SaveSyncManager
 import es.davidrg.rommsync.data.sync.SyncState
 import com.squareup.moshi.Moshi
@@ -66,15 +67,24 @@ class SyncViewModel(
     private val _conflicts = MutableStateFlow<List<ConflictInfo>>(emptyList())
     val conflicts: StateFlow<List<ConflictInfo>> = _conflicts.asStateFlow()
 
+    /** Operaciones fallidas en el último sync, para la UI de detalle. */
+    private val _failedOps = MutableStateFlow<List<FailedOpInfo>>(emptyList())
+    val failedOps: StateFlow<List<FailedOpInfo>> = _failedOps.asStateFlow()
+
     /** Resoluciones en curso (romId+fileName) para feedback en la UI. */
     private val _resolvingConflict = MutableStateFlow<String?>(null)
     val resolvingConflict: StateFlow<String?> = _resolvingConflict.asStateFlow()
 
-    /** Carga los conflictos del último sync persistido. */
+    /** Carga los conflictos y fallidos del último sync persistido. */
     init {
         viewModelScope.launch {
             settingsRepository.lastSyncConflictsJson.collect { json ->
                 _conflicts.value = parseConflictsJson(json)
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.lastSyncFailedJson.collect { json ->
+                _failedOps.value = parseFailuresJson(json)
             }
         }
     }
@@ -99,6 +109,12 @@ class SyncViewModel(
 
     private fun parseConflictsJson(json: String): List<ConflictInfo> = try {
         conflictMoshiAdapter.fromJson(json).orEmpty()
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    private fun parseFailuresJson(json: String): List<FailedOpInfo> = try {
+        failuresMoshiAdapter.fromJson(json).orEmpty()
     } catch (_: Exception) {
         emptyList()
     }
@@ -201,6 +217,16 @@ class SyncViewModel(
                 .build()
             moshi.adapter<List<ConflictInfo>>(
                 Types.newParameterizedType(List::class.java, ConflictInfo::class.java),
+            )
+        }
+
+        /** Adaptador Moshi para persistir operaciones fallidas como JSON. */
+        private val failuresMoshiAdapter by lazy {
+            val moshi = Moshi.Builder()
+                .add(KotlinJsonAdapterFactory())
+                .build()
+            moshi.adapter<List<FailedOpInfo>>(
+                Types.newParameterizedType(List::class.java, FailedOpInfo::class.java),
             )
         }
     }

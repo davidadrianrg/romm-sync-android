@@ -1094,6 +1094,9 @@ private fun RomDetailSheet(
                 Spacer(modifier = Modifier.size(16.dp))
                 val hasOverride = !savesPathOverride.isNullOrBlank()
                 val displayedPath = savesPathOverride?.takeIf { it.isNotBlank() } ?: platformSavesPath
+                var manualPath by remember(savesPathOverride, platformSavesPath) {
+                    mutableStateOf(displayedPath)
+                }
 
                 Text(
                     "Ubicación de las partidas",
@@ -1102,19 +1105,33 @@ private fun RomDetailSheet(
                 )
                 Spacer(modifier = Modifier.size(4.dp))
                 Text(
-                    displayedPath,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
                     if (hasOverride) "Ruta personalizada para este juego"
                     else "Heredada de la plataforma",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(modifier = Modifier.size(10.dp))
+                Spacer(modifier = Modifier.size(8.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    value = manualPath,
+                    onValueChange = { manualPath = it },
+                    label = { Text("Ruta de saves") },
+                    placeholder = { Text("/data/data/com.juego/files") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    trailingIcon = {
+                        androidx.compose.material3.IconButton(
+                            onClick = { showFolderPicker = true },
+                        ) {
+                            Icon(
+                                Icons.Filled.Folder,
+                                contentDescription = "Seleccionar carpeta",
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    },
+                )
+                Spacer(modifier = Modifier.size(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1131,12 +1148,26 @@ private fun RomDetailSheet(
                         Spacer(modifier = Modifier.size(6.dp))
                         Text("Seleccionar carpeta")
                     }
-                    if (hasOverride) {
+                    if (manualPath != displayedPath) {
+                        androidx.compose.material3.Button(
+                            onClick = { onSavesPathOverrideChange(manualPath.trim()) },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Guardar ruta")
+                        }
+                    } else if (hasOverride) {
                         TextButton(onClick = { onSavesPathOverrideChange(null) }) {
                             Text("Restablecer")
                         }
                     }
                 }
+                Spacer(modifier = Modifier.size(4.dp))
+                Text(
+                    "Puedes escribir la ruta a mano (ej. /data/data/paquete en " +
+                        "teléfonos rooteados) o usar el explorador.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

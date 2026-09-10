@@ -6,9 +6,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
 
 /**
  * Handler de saves para PS2 (AetherSX2 / NetherSX2) en modo Folder Memory Card.
@@ -58,7 +56,7 @@ class Ps2SaveHandler : SaveHandler {
 
             val mtime = folderLastModified(saveFolder)
             val zipFile = File.createTempFile("ps2_save_${baSerial}_", ".zip")
-            zipFolder(saveFolder, zipFile)
+            zipFolderDeterministic(saveFolder, zipFile)
 
             results.add(
                 LocalSave(
@@ -197,21 +195,6 @@ class Ps2SaveHandler : SaveHandler {
         return newest
     }
 
-    private fun zipFolder(folder: File, output: File) {
-        ZipOutputStream(FileOutputStream(output)).use { zos ->
-            folder.walkTopDown().forEach { file ->
-                val relativePath = "${folder.name}/${folder.toPath().relativize(file.toPath())}"
-                if (file.isFile) {
-                    zos.putNextEntry(ZipEntry(relativePath))
-                    file.inputStream().use { it.copyTo(zos) }
-                    zos.closeEntry()
-                } else if (file != folder) {
-                    zos.putNextEntry(ZipEntry("$relativePath/"))
-                    zos.closeEntry()
-                }
-            }
-        }
-    }
 
     companion object {
         const val DEFAULT_SAVES_PATH = "/storage/emulated/0/Android/data/xyz.aethersx2.android/files/memcards"

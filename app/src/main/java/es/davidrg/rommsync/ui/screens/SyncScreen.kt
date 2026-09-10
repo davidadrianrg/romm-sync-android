@@ -59,6 +59,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import es.davidrg.rommsync.RomMSyncApplication
 import es.davidrg.rommsync.data.local.SettingsDataStore
 import es.davidrg.rommsync.data.sync.ConflictInfo
+import es.davidrg.rommsync.data.sync.FailedOpInfo
 import es.davidrg.rommsync.data.sync.SyncState
 import es.davidrg.rommsync.ui.components.FolderPickerDialog
 import es.davidrg.rommsync.ui.viewmodel.SavePreviewItem
@@ -102,6 +103,7 @@ fun SyncScreen() {
     val localSaves by viewModel.localSaves.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
     val conflicts by viewModel.conflicts.collectAsState()
+    val failedOps by viewModel.failedOps.collectAsState()
     val resolvingConflict by viewModel.resolvingConflict.collectAsState()
 
     var retroArchPath by remember { mutableStateOf("") }
@@ -158,6 +160,13 @@ fun SyncScreen() {
                             viewModel.resolveConflict(romId, fileName, resolution)
                         },
                     )
+                }
+            }
+
+            // -- Fallidos del último sync (detalle de qué y por qué)
+            if (failedOps.isNotEmpty()) {
+                item(key = "failures_section") {
+                    FailedOpsSection(failedOps)
                 }
             }
 
@@ -578,6 +587,71 @@ private fun SyncSection(
             }
             Spacer(modifier = Modifier.height(14.dp))
             content()
+        }
+    }
+}
+
+/**
+ * Sección con el detalle de operaciones fallidas del último sync: qué save,
+ * de qué juego y por qué falló (subida o descarga).
+ */
+@Composable
+private fun FailedOpsSection(failures: List<FailedOpInfo>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Error,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.size(10.dp))
+                Text(
+                    "Fallidos (${failures.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "Estos saves no se sincronizaron. Vuelve a intentarlo; si persiste, " +
+                    "revisa la ruta de saves y la conexión con el servidor.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            failures.forEach { failure ->
+                Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                    Text(
+                        failure.romName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "${failure.fileName} — ${failure.action}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        failure.reason,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                    )
+                }
+            }
         }
     }
 }

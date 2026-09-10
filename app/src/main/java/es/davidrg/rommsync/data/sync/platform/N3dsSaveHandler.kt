@@ -5,9 +5,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
 
 /**
  * Handler de saves para Nintendo 3DS (Azahar / Citra / Lime3DS).
@@ -49,7 +47,7 @@ class N3dsSaveHandler : SaveHandler {
 
         val newestMtime = files.maxOf { it.lastModified() }
         val zipFile = File.createTempFile("3ds_save_${titleId}_", ".zip")
-        zipFolder(dataDir, zipFile)
+        zipFolderDeterministic(dataDir, zipFile)
 
         results.add(
             LocalSave(
@@ -182,21 +180,6 @@ class N3dsSaveHandler : SaveHandler {
         return newest
     }
 
-    private fun zipFolder(folder: File, output: File) {
-        ZipOutputStream(FileOutputStream(output)).use { zos ->
-            folder.walkTopDown().forEach { file ->
-                val relativePath = "${folder.name}/${folder.toPath().relativize(file.toPath())}"
-                if (file.isFile) {
-                    zos.putNextEntry(ZipEntry(relativePath))
-                    file.inputStream().use { it.copyTo(zos) }
-                    zos.closeEntry()
-                } else if (file != folder) {
-                    zos.putNextEntry(ZipEntry("$relativePath/"))
-                    zos.closeEntry()
-                }
-            }
-        }
-    }
 
     companion object {
         const val DEFAULT_SAVES_PATH =

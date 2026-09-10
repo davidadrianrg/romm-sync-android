@@ -73,13 +73,14 @@ class SaveSyncWorker(
 
         if (result.isSuccess) {
             Log.i(TAG, "Sync completed: ${result.message}")
-            notifySyncResult(success = true, message = result.message ?: "Sincronización completada", conflicts = result.conflicts)
+            notifySyncResult(success = true, message = result.message ?: "Sincronización completada", conflicts = result.conflicts, failed = result.failedDetails.size)
             Result.success(workDataOf(
                 KEY_MESSAGE to (result.message ?: "Sincronización completada"),
                 KEY_UPLOADED to result.uploaded,
                 KEY_DOWNLOADED to result.downloaded,
                 KEY_CONFLICTS to result.conflicts,
                 KEY_CONFLICTS_JSON to serializeConflicts(result.conflictDetails),
+                KEY_FAILED_JSON to serializeFailures(result.failedDetails),
             ))
         } else {
             Log.w(TAG, "Sync failed: ${result.error}")
@@ -131,7 +132,7 @@ class SaveSyncWorker(
      * plano. Solo si hubo actividad (uploads/downloads/conflictos) o error:
      * un "todo al día" silencioso no merece interrumpir.
      */
-    private fun notifySyncResult(success: Boolean, message: String, conflicts: Int) {
+    private fun notifySyncResult(success: Boolean, message: String, conflicts: Int, failed: Int = 0) {
         val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE)
             as NotificationManager
         val quiet = success && message.contains("nada que sincronizar", ignoreCase = true)
@@ -140,6 +141,7 @@ class SaveSyncWorker(
         val title = when {
             !success -> "Sync de saves falló"
             conflicts > 0 -> "Sync terminó con $conflicts conflicto(s)"
+            failed > 0 -> "Sync terminó con $failed fallido(s)"
             else -> "Saves sincronizados"
         }
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
@@ -161,6 +163,7 @@ class SaveSyncWorker(
         const val KEY_DOWNLOADED = "sync_downloaded"
         const val KEY_CONFLICTS = "sync_conflicts"
         const val KEY_CONFLICTS_JSON = "sync_conflicts_json"
+        const val KEY_FAILED_JSON = "sync_failed_json"
         const val KEY_CONFLICT_ROM_ID = "conflict_rom_id"
         const val KEY_CONFLICT_FILE_NAME = "conflict_file_name"
         const val KEY_CONFLICT_RESOLUTION = "conflict_resolution"
@@ -180,8 +183,26 @@ class SaveSyncWorker(
             )
         }
 
+        /** Adaptador Moshi para serializar operaciones fallidas. */
+        private val failuresAdapter by lazy {
+            val moshi = com.squareup.moshi.Moshi.Builder()
+                .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
+                .build()
+            moshi.adapter<List<FailedOpInfo>>(
+                com.squareup.moshi.Types.newParameterizedType(
+                    List::class.java, FailedOpInfo::class.java,
+                ),
+            )
+        }
+
         private fun serializeConflicts(conflicts: List<ConflictInfo>): String = try {
             conflictsAdapter.toJson(conflicts)
+        } catch (_: Exception) {
+            "[]"
+        }
+
+        private fun serializeFailures(failures: List<FailedOpInfo>): String = try {
+            failuresAdapter.toJson(failures)
         } catch (_: Exception) {
             "[]"
         }

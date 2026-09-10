@@ -129,6 +129,12 @@ class SaveSyncManager(private val context: Context) {
                             SettingsDataStore(context).setLastSyncConflictsJson(conflictsJson)
                         }
                     }
+                    val failedJson = info.outputData.getString(SaveSyncWorker.KEY_FAILED_JSON)
+                    if (failedJson != null) {
+                        kotlinx.coroutines.runBlocking {
+                            SettingsDataStore(context).setLastSyncFailedJson(failedJson)
+                        }
+                    }
                     SyncState.Success(message)
                 }
                 WorkInfo.State.FAILED -> {
