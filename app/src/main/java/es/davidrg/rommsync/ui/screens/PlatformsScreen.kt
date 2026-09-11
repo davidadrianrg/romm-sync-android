@@ -36,6 +36,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -44,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -202,6 +204,7 @@ fun PlatformsScreen() {
             // Desplegable: colapsada ocupa una sola fila para no tapar la
             // lista de plataformas; el detalle por plataforma va detrás.
             var statsExpanded by remember { mutableStateOf(false) }
+            var showAllPlatforms by remember { mutableStateOf(false) }
             libraryStats?.let { stats ->
                 Card(
                     modifier = Modifier
@@ -267,12 +270,70 @@ fun PlatformsScreen() {
                                 }
                             }
                             if (stats.byPlatform.size > 5) {
-                                Text(
-                                    "+ ${stats.byPlatform.size - 5} plataformas más",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
+                                TextButton(
+                                    onClick = { showAllPlatforms = true },
+                                    contentPadding = PaddingValues(
+                                        horizontal = 0.dp,
+                                        vertical = 0.dp,
+                                    ),
+                                    modifier = Modifier.padding(top = 2.dp),
+                                ) {
+                                    Text(
+                                        "Ver más (${stats.byPlatform.size - 5} plataformas)",
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                }
+
+
+            // Sheet con el detalle COMPLETO de plataformas: la tarjeta solo
+            // muestra el top 5 y el resto no cabe en el móvil.
+            if (showAllPlatforms) {
+                libraryStats?.let { stats ->
+                    ModalBottomSheet(
+                        onDismissRequest = { showAllPlatforms = false },
+                        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                            Text(
+                                "ROMs locales por plataforma",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                "${stats.totalRoms} ROMs · ${formatStatsBytes(stats.totalBytes)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(
+                                start = 24.dp,
+                                end = 24.dp,
+                                bottom = 24.dp,
+                            ),
+                        ) {
+                            items(stats.byPlatform, key = { it.platformSlug }) { p ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text(
+                                        p.platformSlug,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                    Text(
+                                        "${p.romCount} · ${formatStatsBytes(p.totalBytes)}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
                     }
